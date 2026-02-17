@@ -1,0 +1,96 @@
+type bool    = False | True
+type nat     = Z (* 0 *) | S (* n *) of nat
+type 'a list = Nil (* [] *) | Cons (* :: *) of 'a * 'a list
+type q       = Init | Next | Flip | Done | Back | Final
+type s       = B | A0 | A1 | A2 | A3
+
+iso delta = case
+| (Init, (l, B, r))       <-> (Next, (l, B, r))
+| (Next, (l, s, s' :: r)) <-> (Flip, (s :: l, s', r))
+| (Flip, (l, A0, r))      <-> (Next, (l, A1, r))
+| (Flip, (l, A1, r))      <-> (Next, (l, A0, r))
+| (Flip, (l, B, r))       <-> (Back, (l, B, r))
+| (Back, (s' :: l, s, r)) <-> (Done, (l, s', s :: r))
+| (Done, (l, A0, r))      <-> (Back, (l, A0, r))
+| (Done, (l, A1, r))      <-> (Back, (l, A1, r))
+| (Done, (l, B, r))       <-> (Final, (l, B, r))
+in
+
+iso delta_fwd = case c <->
+  match delta c with
+  | (Init, t)  <-> ((Init, t), False)
+  | (Next, t)  <-> ((Next, t), False)
+  | (Flip, t)  <-> ((Flip, t), False)
+  | (Done, t)  <-> ((Done, t), False)
+  | (Back, t)  <-> ((Back, t), False)
+  | (Final, t) <-> ((Final, t), True)
+in
+
+iso delta_bwd = case c <->
+  match inv delta c with
+  | (Init, t)  <-> ((Init, t), True)
+  | (Next, t)  <-> ((Next, t), False)
+  | (Flip, t)  <-> ((Flip, t), False)
+  | (Done, t)  <-> ((Done, t), False)
+  | (Back, t)  <-> ((Back, t), False)
+  | (Final, t) <-> ((Final, t), False)
+in
+
+iso rec rm_blank = case
+| []      <-> ([], 0)
+| B  :: t <-> let ([], n) = rm_blank t in ([], S n)
+| A0 :: t <-> let (t, n)  = rm_blank t in (A0 :: t, n)
+| A1 :: t <-> let (t, n)  = rm_blank t in (A1 :: t, n)
+| A2 :: t <-> let (t, n)  = rm_blank t in (A2 :: t, n)
+| A3 :: t <-> let (t, n)  = rm_blank t in (A3 :: t, n)
+in
+
+iso clean_up = case ((x, (l, y, r)), g) <->
+  let (l, n1) = rm_blank l in
+  let (r, n2) = rm_blank r in
+  ((x, (l, y, r)), (g, n1, n2))
+in
+
+iso rec extend_if_empty = case
+| []      <-> ([B], True)
+| x :: xs <-> (x :: xs, False)
+in
+
+iso extend = case (q, (l, s, r)) <->
+  let (l, bl) = extend_if_empty l in
+  let (r, br) = extend_if_empty r in
+  ((q, (l, s, r)), (bl, br))
+in
+
+iso rec iter delta = case c <->
+  let (c, g) = extend c in
+  match (delta c, g) with
+  | ((c, True), g) <-> (c, [(g, True)])
+  | ((c, False), g)  <->
+    let (c, gs) = iter delta c in
+    (c, (g, False) :: gs)
+in
+
+iso rm_garb f f' = case i <->
+  let (o, g) = f i in
+  let (o, o') = (o, o) in
+  let i = inv f (o, g) in
+  let (i', g) = f' o' in
+  let (i, i) = (i, i') in
+  inv f' (i, g)
+in
+
+iso compose g f = case x <-> g (f x) in
+
+iso compute = rm_garb
+  {compose clean_up {iter delta_fwd}}
+  {compose clean_up {iter delta_bwd}}
+in
+
+iso sem = case tape <->
+  let (Final, ([], B, tape)) =
+    compute (Init, ([], B, tape)) in tape
+in
+
+sem [A0; A0; A0; A1; A1; A0; A1; A0]
+

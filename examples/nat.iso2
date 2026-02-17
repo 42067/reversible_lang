@@ -1,0 +1,54 @@
+type bool            = False | True
+type 'a option       = None | Some of 'a
+type ('l, 'r) either = Left of 'l | Right of 'r
+type 'a list         = Nil (* [] *) | Cons (* :: *) of 'a * 'a list
+type nat             = Z (* 0 *) | S (* n *) of nat
+type ord             = Lt | Eq | Gt
+type parity          = Even | Odd
+
+iso rec parity = case
+| 0       <-> (Even, 0)
+| 1       <-> (Odd, 1)
+| S (S x) <-> let (b, x) = parity x in (b, S (S x))
+in
+
+(* add (x, y) = (x + y, y) *)
+iso rec add = case
+| (m, 0)   <-> (m, 0)
+| (m, S n) <-> let (m, n) = add (S m, n) in (m, S n)
+in
+
+iso rec cantor_pairing = case x <->
+  let y = match x with
+    | (S i, j) <-> Some (i, S j)
+    | (0, S j) <-> Some (j, 0)
+    | (0, 0)   <-> None
+  in match y with
+    | Some x <-> S (cantor_pairing x)
+    | None   <-> 0
+in
+
+iso rec cmp = case
+| (0, S n)   <-> (Lt, 0, S n)
+| (S n, 0)   <-> (Gt, S n, 0)
+| (0, 0)     <-> (Eq, 0, 0)
+| (S m, S n) <->
+  let (o, m, n) = cmp (m, n) in
+  (o, S m, S n)
+in
+
+iso rec halve = case
+| 0       <-> (0, 0)
+| 1       <-> (0, 1)
+| S (S n) <-> let (m, n) = halve n in (S m, S n)
+in
+
+iso rec fib = case
+| 0 <-> (1, 1)
+| S n <->
+  let (S (S m), n) = add (fib n) in
+  (n, S (S m))
+in
+
+(fib 9, inv fib (8, 13))
+

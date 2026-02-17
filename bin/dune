@@ -1,0 +1,9 @@
+(ocamllex lexer)
+
+(menhir
+ (modules parser))
+
+(executable
+ (public_name reversible_lang)
+ (name reversible_lang)
+ (libraries reversible_lang))
