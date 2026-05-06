@@ -1,7 +1,10 @@
 # reversible_lang
-A reversible functional language extending https://arxiv.org/abs/2309.12151
+_reversible_lang_ is a reversible functional language extending https://arxiv.org/abs/2309.12151.
+This repository will never be updated.
+
+[Actively developed version](https://github.com/Suikaaah/pisolang)
 
 ## Build / Run
 `dune exec reversible_lang -- <file path>`
 
-You may run `dune exec reversible_lang -- examples/nat.iso2` for example.
+E.g. `dune exec reversible_lang -- examples/nat.iso2`
