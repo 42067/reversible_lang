@@ -1,8 +1,9 @@
-type bool    = False | True
 type nat     = Z (* 0 *) | S (* n *) of nat
 type 'a list = Nil (* [] *) | Cons (* :: *) of 'a * 'a list
+type bool    = False | True
 type q       = Init | Next | Flip | Done | Back | Final
 type s       = B | A0 | A1 | A2 | A3
+;;
 
 iso delta = case
 | (Init, (l, B, r))       <-> (Next, (l, B, r))
@@ -16,24 +17,22 @@ iso delta = case
 | (Done, (l, B, r))       <-> (Final, (l, B, r))
 in
 
-iso delta_fwd = case c <->
-  match delta c with
-  | (Init, t)  <-> ((Init, t), False)
-  | (Next, t)  <-> ((Next, t), False)
-  | (Flip, t)  <-> ((Flip, t), False)
-  | (Done, t)  <-> ((Done, t), False)
-  | (Back, t)  <-> ((Back, t), False)
-  | (Final, t) <-> ((Final, t), True)
+iso delta_fwd (c) = match delta c with
+| (Init, t)  <-> ((Init, t), False)
+| (Next, t)  <-> ((Next, t), False)
+| (Flip, t)  <-> ((Flip, t), False)
+| (Done, t)  <-> ((Done, t), False)
+| (Back, t)  <-> ((Back, t), False)
+| (Final, t) <-> ((Final, t), True)
 in
 
-iso delta_bwd = case c <->
-  match inv delta c with
-  | (Init, t)  <-> ((Init, t), True)
-  | (Next, t)  <-> ((Next, t), False)
-  | (Flip, t)  <-> ((Flip, t), False)
-  | (Done, t)  <-> ((Done, t), False)
-  | (Back, t)  <-> ((Back, t), False)
-  | (Final, t) <-> ((Final, t), False)
+iso delta_bwd (c) = match inv delta c with
+| (Init, t)  <-> ((Init, t), True)
+| (Next, t)  <-> ((Next, t), False)
+| (Flip, t)  <-> ((Flip, t), False)
+| (Done, t)  <-> ((Done, t), False)
+| (Back, t)  <-> ((Back, t), False)
+| (Final, t) <-> ((Final, t), False)
 in
 
 iso rec rm_blank = case
@@ -45,7 +44,7 @@ iso rec rm_blank = case
 | A3 :: t <-> let (t, n)  = rm_blank t in (A3 :: t, n)
 in
 
-iso clean_up = case ((x, (l, y, r)), g) <->
+iso clean_up ((x, (l, y, r)), g) =
   let (l, n1) = rm_blank l in
   let (r, n2) = rm_blank r in
   ((x, (l, y, r)), (g, n1, n2))
@@ -56,40 +55,38 @@ iso rec extend_if_empty = case
 | x :: xs <-> (x :: xs, False)
 in
 
-iso extend = case (q, (l, s, r)) <->
+iso extend (q, (l, s, r)) =
   let (l, bl) = extend_if_empty l in
   let (r, br) = extend_if_empty r in
   ((q, (l, s, r)), (bl, br))
 in
 
-iso rec iter delta = case c <->
+iso rec iter delta (c) =
   let (c, g) = extend c in
   match (delta c, g) with
-  | ((c, True), g) <-> (c, [(g, True)])
-  | ((c, False), g)  <->
+  | ((c, True), g)  <-> (c, [(g, True)])
+  | ((c, False), g) <->
     let (c, gs) = iter delta c in
     (c, (g, False) :: gs)
 in
 
-iso rm_garb f f' = case i <->
-  let (o, g) = f i in
+iso rm_garb f1 f2 (i) =
+  let (o, g) = f1 i in
   let (o, o') = (o, o) in
-  let i = inv f (o, g) in
-  let (i', g) = f' o' in
+  let i = inv f1 (o, g) in
+  let (i', g) = f2 o' in
   let (i, i) = (i, i') in
-  inv f' (i, g)
+  inv f2 (i, g)
 in
-
-iso compose g f = case x <-> g (f x) in
 
 iso compute = rm_garb
-  {compose clean_up {iter delta_fwd}}
-  {compose clean_up {iter delta_bwd}}
+  (clean_up . iter delta_fwd)
+  (clean_up . iter delta_bwd)
 in
 
-iso sem = case tape <->
-  let (Final, ([], B, tape)) =
-    compute (Init, ([], B, tape)) in tape
+iso sem (tape) =
+  let (Final, ([], B, tape)) = compute (Init, ([], B, tape)) in
+  tape
 in
 
 sem [A0; A0; A0; A1; A1; A0; A1; A0]

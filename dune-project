@@ -1,6 +1,6 @@
 (lang dune 3.21)
 
-(name reversible_lang)
+(name pisolang)
 
 (generate_opam_files true)
 
@@ -16,7 +16,7 @@
 (documentation https://url/to/documentation)
 
 (package
- (name reversible_lang)
+ (name pisolang)
  (synopsis "A short synopsis")
  (description "A longer description")
  (depends ocaml ocamllex menhir)

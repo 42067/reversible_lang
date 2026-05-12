@@ -12,9 +12,9 @@ let white = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
 let nat = ['0'-'9']+
 let comment = "(*" ([^'*'] | '*' [^')'])* "*)"
-let ident_tvar = '\'' ['a'-'z'] ['a'-'z' '0'-'9' '_']*
-let ident_var = ['a'-'z'] ['a'-'z' '0'-'9' '_' '\'']*
-let ident_ctor = ['A'-'Z'] ['a'-'z' 'A'-'Z' '0'-'9']*
+let ticked = '\'' ['a'-'z'] ['a'-'z' '0'-'9' '_']*
+let lower = ['a'-'z'] ['a'-'z' '0'-'9' '_' '\'']*
+let upper = ['A'-'Z'] ['a'-'z' 'A'-'Z' '0'-'9']*
 
 rule read = parse
   | eof { EOF }
@@ -23,25 +23,27 @@ rule read = parse
   | comment { read lexbuf }
   | "(" { LPAREN }
   | ")" { RPAREN }
-  | "{" { LBRACE }
-  | "}" { RBRACE }
   | "[" { LBRACKET }
   | "]" { RBRACKET }
+  | "." { DOT }
   | "*" { TIMES }
+  | "+" { PLUS }
   | "|" { PIPE }
   | "," { COMMA }
   | ";" { SEMICOLON }
   | "::" { CONS }
+  | "|>" { TRIANGLE }
   | "->" { ARROW }
   | "<->" { BIARROW }
   | "=" { EQUAL }
+  | "begin" { LPAREN }
+  | "end" { RPAREN }
   | "unit" { UNIT }
   | "let" { LET }
-  | "in" { IN }
   | "iso" { ISO }
+  | "in" { IN }
   | "fix" { FIX }
   | "type" { TYPE }
-  | "inv" { INVERT }
   | "rec" { REC }
   | "of" { OF }
   | "fun" { FUN }
@@ -49,14 +51,15 @@ rule read = parse
   | "match" { MATCH }
   | "with" { WITH }
   | nat { NAT (lexeme lexbuf |> int_of_string) }
-  | ident_tvar { TVAR (lexeme lexbuf) }
-  | ident_var { VAR (lexeme lexbuf) }
-  | ident_ctor { CTOR (lexeme lexbuf) }
+  | ticked { TICKED (lexeme lexbuf) }
+  | lower { LOWER (lexeme lexbuf) }
+  | upper { UPPER (lexeme lexbuf) }
 
 {
   let string_of_lb lexbuf =
     let pos = lexbuf.lex_curr_p in
-    Printf.sprintf "line %d, character %d" pos.pos_lnum (pos.pos_cnum - pos.pos_bol + 1)
+    Format.sprintf "parse error at line %d, character %d"
+      pos.pos_lnum (pos.pos_cnum - pos.pos_bol + 1)
 
   let parse_res lexbuf =
     try Ok (program read lexbuf) with

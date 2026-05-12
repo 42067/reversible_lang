@@ -1,65 +1,101 @@
-open Util
+type 'a subst
+type 'a scheme
+type 'a ctx
+type 'a eq
+type eq_combined
+type 'a inferred
 
-type any
-type equation
-type subst
-type inferred_pair
-type inferred
-type elt
-type context
+val subst_eq_base : Types.base subst -> eq_combined list -> eq_combined list
+val subst_eq_iso : Types.iso subst -> eq_combined list -> eq_combined list
+val instantiate_base : Util.generator -> Types.base scheme -> Types.base
+val instantiate_iso : Util.generator -> Types.iso scheme -> Types.iso
+val fv_phi : Types.iso scheme Util.IntMap.t -> Util.IntSet.t
+val fv_delta : Types.base scheme Util.IntMap.t -> Util.IntSet.t
+val subst_phi : Types.iso subst -> Types.iso ctx -> Types.iso ctx
+val subst_phi_base : Types.base subst -> Types.iso ctx -> Types.iso ctx
+val subst_delta : Types.base subst -> Types.base ctx -> Types.base ctx
 
-val subst : subst -> any -> any
-val tvar_map : any list -> (int * int) list
-val invert_iso_type : any -> any myresult
-val normalize_inv : any -> any myresult
-val base_of_any : any -> Types.base_type myresult
-val iso_of_any : any -> Types.iso_type myresult
-val show_any : (int * int) list -> any -> string
-val show_elt : elt -> string
-val show_context : context -> string
-val show_equation : equation -> string
-val show_equations : equation list -> string
-val subst_in_context : subst -> context -> context
-val subst_in_equations : subst -> equation list -> equation list
-val instantiate : Types.generator -> elt -> any
-val occurs : int -> any -> bool
-val unify : equation list -> subst list myresult
-val finalize : inferred -> any myresult
-val find_generalizable : any -> context -> int list
-val extract_named : Types.generator -> Types.value -> any StrMap.t
+val subst_phi_bulk :
+  Types.iso subst list ->
+  Types.base subst list ->
+  Types.iso ctx ->
+  Types.iso ctx
 
-val invert_pairs :
-  (Types.value * Types.expr) list -> (Types.value * Types.expr) list
+val subst_delta_bulk : Types.base subst list -> Types.base ctx -> Types.base ctx
+val combine_eq : Types.base eq list -> Types.iso eq list -> eq_combined list
+val split_eq : eq_combined list -> Types.base eq list * Types.iso eq list
 
-val check_pair : Types.value * Types.expr -> unit myresult
+val find_generalizable_base :
+  Types.iso ctx -> Types.base ctx -> Types.base -> int list
+
+val find_generalizable_iso :
+  Types.iso ctx -> Types.base ctx -> Types.iso -> int list
+
+val unify :
+  map:string Util.IntMap.t ->
+  eq_combined list ->
+  Types.iso subst list * Types.base subst list
+
+val pat_gen : Util.generator -> Terms.pat -> Types.base Util.IntMap.t
 
 val generalize_iso :
-  equation list -> context -> string -> any -> context myresult
+  map:string Util.IntMap.t ->
+  Types.iso ctx ->
+  Types.base ctx ->
+  eq_combined list ->
+  int ->
+  Types.iso ->
+  Types.iso ctx
 
-val generalize :
+val generalize_base :
   ?disabled:bool ->
-  equation list ->
-  context ->
-  Types.value ->
-  any ->
-  Types.generator ->
-  (context * equation list) myresult
+  map:string Util.IntMap.t ->
+  Util.generator ->
+  Types.iso ctx ->
+  Types.base ctx ->
+  eq_combined list ->
+  Terms.pat ->
+  Types.base ->
+  Types.base ctx * eq_combined list
 
-val infer_pair :
-  Types.generator ->
-  context ->
-  Types.value * Types.expr ->
-  inferred_pair myresult
+val infer_term :
+  map:string Util.IntMap.t ->
+  Util.generator ->
+  Types.iso ctx ->
+  Types.base ctx ->
+  Terms.term ->
+  Types.base inferred
 
-val infer_term : Types.term -> Types.generator -> context -> inferred myresult
-val infer_expr : Types.expr -> Types.generator -> context -> inferred myresult
-val infer_iso : Types.iso -> Types.generator -> context -> inferred myresult
+val infer_expr :
+  map:string Util.IntMap.t ->
+  Util.generator ->
+  Types.iso ctx ->
+  Types.base ctx ->
+  Terms.expr ->
+  Types.base inferred
 
-val any_of_base :
-  var_map:int StrMap.t ->
-  arity_map:int StrMap.t ->
-  Types.base_type ->
-  any myresult
+val infer_branch :
+  map:string Util.IntMap.t ->
+  Util.generator ->
+  Types.iso ctx ->
+  Types.base ctx ->
+  Terms.pat * Terms.expr ->
+  Types.iso inferred
 
-val arity_map : Types.typedef list -> int StrMap.t
-val build_ctx : Types.generator -> Types.typedef list -> context myresult
+val infer_iso :
+  map:string Util.IntMap.t ->
+  Util.generator ->
+  Types.iso ctx ->
+  Types.base ctx ->
+  Terms.iso ->
+  Types.iso inferred
+
+val auto :
+  map:string Util.IntMap.t ->
+  Util.generator ->
+  Types.iso ctx ->
+  Types.base ctx ->
+  Terms.term ->
+  Types.base
+
+val init_ctx : Surface.MInt.typedef list -> Types.iso ctx * Types.base ctx

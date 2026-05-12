@@ -1,349 +1,173 @@
-open Util
+type base =
+  | BaseUnit
+  | BaseIdent of int
+  | BaseVar of int
+  | BaseProd of base List2.t
+  | BaseApp of base List1.t * int
 
-type base_type =
-  | Unit
-  | Product of base_type list
-  | Named of string
-  | Var of string
-  | Ctor of base_type list * string
+type iso =
+  | IsoBiArrow of base * base
+  | IsoArrow of iso * iso
+  | IsoVar of int
+  | IsoInv of iso
 
-type iso_type =
-  | BiArrow of { a : base_type; b : base_type }
-  | Arrow of { t_1 : iso_type; t_2 : iso_type }
-  | Var of string
+type 'a subst = 'a * int
 
-type value =
-  | Unit
-  | Var of string
-  | Ctor of string
-  | Cted of { c : string; v : value }
-  | Tuple of value list
+let rec is_fv_base v = function
+  | BaseUnit | BaseIdent _ -> false
+  | BaseVar v' -> v' = v
+  | BaseProd l -> List2.fold_left (fun acc a -> acc || is_fv_base v a) false l
+  | BaseApp (l, _) ->
+      List1.fold_left (fun acc a -> acc || is_fv_base v a) false l
 
-type expr =
-  | Value of value
-  | Let of { p_1 : value; omega : iso; p_2 : value; e : expr }
-  | LetVal of { p : value; v : value; e : expr }
+let rec is_fv_iso v = function
+  | IsoBiArrow (a, b) -> is_fv_base v a || is_fv_base v b
+  | IsoArrow (t_1, t_2) -> is_fv_iso v t_1 || is_fv_iso v t_2
+  | IsoVar v' -> v' = v
+  | IsoInv t -> is_fv_iso v t
 
-and iso =
-  | Pairs of (value * expr) list
-  | Fix of { phi : string; omega : iso }
-  | Lambda of { psi : string; omega : iso }
-  | Var of string
-  | App of { omega_1 : iso; omega_2 : iso }
-  | Invert of iso
+let rec invert = function
+  | IsoBiArrow (a, b) -> IsoBiArrow (b, a)
+  | IsoArrow (t_1, t_2) -> IsoArrow (invert t_1, invert t_2)
+  | IsoVar v -> IsoInv (IsoVar v)
+  | IsoInv t -> t
 
-type term =
-  | Unit
-  | Var of string
-  | Ctor of string
-  | Cted of { c : string; t : term }
-  | Tuple of term list
-  | App of { omega : iso; t : term }
-  | Let of { p : value; t_1 : term; t_2 : term }
-  | LetIso of { phi : string; omega : iso; t : term }
+let rec fv_base_list : base -> int list = function
+  | BaseUnit | BaseIdent _ -> []
+  | BaseVar v -> [ v ]
+  | BaseProd l -> List2.map fv_base_list l |> List2.to_list |> List.flatten
+  | BaseApp (l, _) -> List1.map fv_base_list l |> List1.to_list |> List.flatten
 
-type expr_intermediate =
-  | IValue of term
-  | ILet of { p_1 : value; p_2 : term; e : expr_intermediate }
+let fv_base a = fv_base_list a |> Util.IntSet.of_list
 
-type variant = Value of string | Iso of { c : string; a : base_type }
-type typedef = { vars : string list; t : string; vs : variant list }
-type program = { ts : typedef list; t : term }
-type generator = { mutable i : int }
+let rec fv_iso_list : iso -> int list = function
+  | IsoBiArrow (a, b) -> fv_base_list a @ fv_base_list b
+  | IsoArrow (t_1, t_2) -> fv_iso_list t_1 @ fv_iso_list t_2
+  | IsoVar v -> [ v ]
+  | IsoInv t -> fv_iso_list t
 
-let rec term_of_value : value -> term = function
-  | Unit -> Unit
-  | Var x -> Var x
-  | Ctor x -> Ctor x
-  | Cted { c; v } -> Cted { c; t = term_of_value v }
-  | Tuple l -> Tuple (List.map term_of_value l)
+let fv_iso t = fv_iso_list t |> Util.IntSet.of_list
 
-let rec term_of_expr : expr -> term = function
-  | Value v -> term_of_value v
-  | Let { p_1; omega; p_2; e } ->
-      Let
-        {
-          p = p_1;
-          t_1 = App { omega; t = term_of_value p_2 };
-          t_2 = term_of_expr e;
-        }
-  | LetVal { p; v; e } -> Let { p; t_1 = term_of_value v; t_2 = term_of_expr e }
+let rec fv_iso_sep_list = function
+  | IsoBiArrow (a, b) ->
+      fv_base_list a @ fv_base_list b |> List.map (fun v -> `Base v)
+  | IsoArrow (t_1, t_2) -> fv_iso_sep_list t_1 @ fv_iso_sep_list t_2
+  | IsoVar v -> [ `Iso v ]
+  | IsoInv t -> fv_iso_sep_list t
 
-let rec value_of_expr : expr -> value = function
-  | Value v -> v
-  | Let { e; _ } -> value_of_expr e
-  | LetVal { e; _ } -> value_of_expr e
+let rec subst_base ((a, v) as s) = function
+  | BaseUnit -> BaseUnit
+  | BaseIdent x -> BaseIdent x
+  | BaseVar v' -> if v' = v then a else BaseVar v'
+  | BaseProd l -> BaseProd (List2.map (subst_base s) l)
+  | BaseApp (l, x) -> BaseApp (List1.map (subst_base s) l, x)
 
-let rec contains_value (what : string) : value -> bool = function
-  | Unit -> false
-  | Var x -> x = what
-  | Ctor _ -> false
-  | Cted { v; _ } -> contains_value what v
-  | Tuple l -> List.exists (contains_value what) l
+let rec subst_iso ((t, v) as s) = function
+  | IsoBiArrow (a, b) -> IsoBiArrow (a, b)
+  | IsoArrow (t_1, t_2) -> IsoArrow (subst_iso s t_1, subst_iso s t_2)
+  | IsoVar v' -> if v' = v then t else IsoVar v'
+  | IsoInv t' -> IsoInv (subst_iso s t')
 
-let contains_pairs (what : string) (pairs : (value * expr) list) : bool =
-  List.exists (fun (v, _) -> contains_value what v) pairs
+let rec subst_base_iso ((a, v) as s) = function
+  | IsoBiArrow (a, b) -> IsoBiArrow (subst_base s a, subst_base s b)
+  | IsoArrow (t_1, t_2) -> IsoArrow (subst_base_iso s t_1, subst_base_iso s t_2)
+  | IsoVar v' -> IsoVar v'
+  | IsoInv t -> IsoInv (subst_base_iso s t)
 
-let rec lambdas_of_params : string list -> iso -> iso = function
-  | [] -> fun omega -> omega
-  | psi :: tl -> fun omega -> Lambda { psi; omega = lambdas_of_params tl omega }
+let subst_base_bulk substs_base a =
+  List.fold_left (fun a s -> subst_base s a) a substs_base
 
-let rec is_list_value : value -> bool = function
-  | Cted { c = "Cons"; v = Tuple [ _; v ] } -> is_list_value v
-  | Ctor "Nil" -> true
-  | _ -> false
+let subst_iso_bulk substs_iso substs_base t =
+  let m = List.fold_left (fun t s -> subst_iso s t) t substs_iso in
+  List.fold_left (fun t s -> subst_base_iso s t) m substs_base
 
-let rec is_list_term : term -> bool = function
-  | Cted { c = "Cons"; t = Tuple [ _; t ] } -> is_list_term t
-  | Ctor "Nil" -> true
-  | _ -> false
-
-let rec is_int_value : value -> bool = function
-  | Cted { c = "S"; v } -> is_int_value v
-  | Ctor "Z" -> true
-  | _ -> false
-
-let rec is_int_term : term -> bool = function
-  | Cted { c = "S"; t } -> is_int_term t
-  | Ctor "Z" -> true
-  | _ -> false
-
-let rec show_base_type : base_type -> string = function
-  | Unit -> "unit"
-  | Product l ->
-      let lmao = function
-        | Product l -> "(" ^ show_base_type (Product l) ^ ")"
-        | otherwise -> show_base_type otherwise
-      in
-      show_listlike lmao ~left:"" ~delim:" * " ~right:"" l
-  | Named x | Var x -> x
-  | Ctor ([], _) -> "unreachable (type constructor with Z arity)"
-  | Ctor ([ (Product _ as x) ], a) -> "(" ^ show_base_type x ^ ") " ^ a
-  | Ctor ([ x ], a) -> show_base_type x ^ " " ^ a
-  | Ctor (l, a) -> show_tuple show_base_type l ^ " " ^ a
-
-let rec show_iso_type : iso_type -> string = function
-  | BiArrow { a; b } -> show_base_type a ^ " <-> " ^ show_base_type b
-  | Arrow { t_1 = Var _ as t_1; t_2 = BiArrow _ as t_2 } ->
-      show_iso_type t_1 ^ " -> (" ^ show_iso_type t_2 ^ ")"
-  | Arrow { t_1 = Var _ as t_1; t_2 } ->
-      show_iso_type t_1 ^ " -> " ^ show_iso_type t_2
-  | Arrow { t_1; t_2 = BiArrow _ as t_2 } ->
-      "(" ^ show_iso_type t_1 ^ ") -> (" ^ show_iso_type t_2 ^ ")"
-  | Arrow { t_1; t_2 } -> "(" ^ show_iso_type t_1 ^ ") -> " ^ show_iso_type t_2
-  | Var x -> x
-
-let rec show_value : value -> string = function
-  | Unit -> "()"
-  | Ctor "Z" -> "0"
-  | Ctor "Nil" -> "[]"
-  | Ctor x | Var x -> x
-  | what when is_int_value what -> begin
-      let rec lmao acc : value -> int = function
-        | Cted { v; _ } -> lmao (acc + 1) v
-        | _ -> acc
-      in
-      lmao 0 what |> string_of_int
-    end
-  | Cted { c = "Cons"; v = Tuple [ v_1; v_2 ] } as v ->
-      if is_list_value v then
-        let rec lmao : value -> string = function
-          | Cted { c = "Cons"; v = Tuple [ v_1; v_2 ] } ->
-              "; " ^ show_value v_1 ^ lmao v_2
-          | Ctor "Nil" -> ""
-          | otherwise -> "; " ^ show_value otherwise
-        in
-        "[" ^ show_value v_1 ^ lmao v_2 ^ "]"
-      else
-        let rec lmao : value -> string = function
-          | Cted { c = "Cons"; v = Tuple [ v_1; v_2 ] } ->
-              " :: " ^ show_value v_1 ^ lmao v_2
-          | otherwise -> " :: " ^ show_value otherwise
-        in
-        show_value v_1 ^ lmao v_2
-  | Tuple l -> show_tuple show_value l
-  | Cted { c; v = Cted _ as v } when is_int_value v || is_list_value v ->
-      c ^ " " ^ show_value v
-  | Cted { c; v = Cted _ as v } -> c ^ " (" ^ show_value v ^ ")"
-  | Cted { c; v } -> c ^ " " ^ show_value v
-
-let rec show_expr : expr -> string = function
-  | Value v -> show_value v
-  | Let
-      {
-        p_1;
-        omega = (Pairs _ | Fix _ | Lambda _) as omega;
-        p_2 = Cted _ as p_2;
-        e;
-      }
-    when is_int_value p_2 || is_list_value p_2 ->
-      "let " ^ show_value p_1 ^ " = {" ^ show_iso omega ^ "} " ^ show_value p_2
-      ^ " in\n  " ^ show_expr e
-  | Let
-      {
-        p_1;
-        omega = (Pairs _ | Fix _ | Lambda _) as omega;
-        p_2 = Cted _ as p_2;
-        e;
-      } ->
-      "let " ^ show_value p_1 ^ " = {" ^ show_iso omega ^ "} (" ^ show_value p_2
-      ^ ") in\n  " ^ show_expr e
-  | Let { p_1; omega = (Pairs _ | Fix _ | Lambda _) as omega; p_2; e } ->
-      "let " ^ show_value p_1 ^ " = {" ^ show_iso omega ^ "} " ^ show_value p_2
-      ^ " in\n  " ^ show_expr e
-  | Let { p_1; omega; p_2 = Cted _ as p_2; e }
-    when is_int_value p_2 || is_list_value p_2 ->
-      "let " ^ show_value p_1 ^ " = " ^ show_iso omega ^ " " ^ show_value p_2
-      ^ " in\n  " ^ show_expr e
-  | Let { p_1; omega; p_2 = Cted _ as p_2; e } ->
-      "let " ^ show_value p_1 ^ " = " ^ show_iso omega ^ " (" ^ show_value p_2
-      ^ ") in\n  " ^ show_expr e
-  | Let { p_1; omega; p_2; e } ->
-      "let " ^ show_value p_1 ^ " = " ^ show_iso omega ^ " " ^ show_value p_2
-      ^ " in\n  " ^ show_expr e
-  | LetVal { p; v; e } ->
-      "let " ^ show_value p ^ " = " ^ show_value v ^ " in\n  " ^ show_expr e
-
-and show_pairs (pairs : (value * expr) list) : string =
-  List.fold_left
-    (fun acc (v, e) -> acc ^ "\n  | " ^ show_value v ^ " <-> " ^ show_expr e)
-    "case" pairs
-
-and show_iso : iso -> string = function
-  | Pairs p -> show_pairs p
-  | Fix { phi; omega; _ } -> "fix " ^ phi ^ ". " ^ show_iso omega
-  | Lambda { psi; omega; _ } -> "fun " ^ psi ^ " -> " ^ show_iso omega
-  | Var omega -> omega
-  | App { omega_1; omega_2 = Var _ as omega_2 } ->
-      show_iso omega_1 ^ " " ^ show_iso omega_2
-  | App { omega_1; omega_2 } -> show_iso omega_1 ^ " {" ^ show_iso omega_2 ^ "}"
-  | Invert (Var _ as omega) -> "inv " ^ show_iso omega
-  | Invert omega -> "inv {" ^ show_iso omega ^ "}"
-
-let show_pairs_lhs (v : value) (pairs : (value * expr) list) : string =
-  let init = "match " ^ show_value v ^ " with" in
-  List.fold_left
-    (fun acc (v, _) -> acc ^ "\n  | " ^ show_value v ^ " <-> ...")
-    init pairs
-
-let rec show_term : term -> string = function
-  | Unit -> "()"
-  | Ctor "Z" -> "0"
-  | Ctor "Nil" -> "[]"
-  | Var x | Ctor x -> x
-  | Tuple l -> show_tuple show_term l
-  | what when is_int_term what -> begin
-      let rec lmao acc = function
-        | Cted { t; _ } -> lmao (acc + 1) t
-        | _ -> acc
-      in
-      lmao 0 what |> string_of_int
-    end
-  | Cted { c = "Cons"; t = Tuple [ t_1; t_2 ] } as t ->
-      if is_list_term t then
-        let rec lmao = function
-          | Cted { c = "Cons"; t = Tuple [ t_1; t_2 ] } ->
-              "; " ^ show_term t_1 ^ lmao t_2
-          | Ctor "Nil" -> ""
-          | otherwise -> "; " ^ show_term otherwise
-        in
-        "[" ^ show_term t_1 ^ lmao t_2 ^ "]"
-      else
-        let rec lmao = function
-          | Cted { c = "Cons"; t = Tuple [ t_1; t_2 ] } ->
-              " :: " ^ show_term t_1 ^ lmao t_2
-          | otherwise -> " :: " ^ show_term otherwise
-        in
-        show_term t_1 ^ lmao t_2
-  | Cted { c; t } when is_int_term t || is_list_term t -> c ^ " " ^ show_term t
-  | Cted { c; t = (Cted _ | App _ | Let _ | LetIso _) as t } ->
-      c ^ " (" ^ show_term t ^ ")"
-  | Cted { c; t } -> c ^ " " ^ show_term t
-  | App { omega = (Pairs _ | Fix _ | Lambda _) as omega; t }
-    when is_int_term t || is_list_term t ->
-      "{" ^ show_iso omega ^ "} " ^ show_term t
-  | App
-      {
-        omega = (Pairs _ | Fix _ | Lambda _) as omega;
-        t = (Cted _ | App _ | Let _ | LetIso _) as t;
-      } ->
-      "{" ^ show_iso omega ^ "} (" ^ show_term t ^ ")"
-  | App { omega = (Pairs _ | Fix _ | Lambda _) as omega; t } ->
-      "{" ^ show_iso omega ^ "} " ^ show_term t
-  | App { omega; t } when is_int_term t || is_list_term t ->
-      show_iso omega ^ " " ^ show_term t
-  | App { omega; t = (Cted _ | App _ | Let _ | LetIso _) as t } ->
-      show_iso omega ^ " (" ^ show_term t ^ ")"
-  | App { omega; t } -> show_iso omega ^ " " ^ show_term t
-  | Let { p; t_1; t_2 } ->
-      "let " ^ show_value p ^ " = " ^ show_term t_1 ^ "\nin\n\n" ^ show_term t_2
-  | LetIso { phi; omega; t } ->
-      "let iso " ^ phi ^ " = " ^ show_iso omega ^ "\nin\n\n" ^ show_term t
-
-let rec nat_of_int (n : int) : value =
-  if n < 1 then Ctor "Z" else Cted { c = "S"; v = nat_of_int (n - 1) }
-
-let rec build_storage (default : 'a) : value -> 'a option StrMap.t = function
-  | Unit -> StrMap.empty
-  | Var x -> StrMap.singleton x None
-  | Ctor _ -> StrMap.empty
-  | Cted { v; _ } -> build_storage default v
-  | Tuple l ->
-      List.map (build_storage default) l
-      |> List.fold_left
-           (StrMap.union (fun _ _ _ -> Some (Some default)))
-           StrMap.empty
-
-let collect_vars (v : value) : string list =
-  let rec collect : value -> string list = function
-    | Unit -> []
-    | Var x -> [ x ]
-    | Ctor _ -> []
-    | Cted { v; _ } -> collect v
-    | Tuple l -> List.map collect l |> List.flatten
-  in
-  collect v |> List.sort_uniq compare
-
-let new_generator () : generator = { i = 0 }
-
-let fresh (gen : generator) : int =
-  let i = gen.i in
-  gen.i <- i + 1;
-  i
-
-let rec expand (gen : generator) :
-    term -> ((value * iso * value) list * value) myresult = function
-  | Unit -> Ok ([], Unit)
-  | Var x -> Ok ([], Var x)
-  | Ctor x -> Ok ([], Ctor x)
-  | Tuple t ->
-      let++ l = List.map (expand gen) t |> bind_all in
-      let l, t = List.fold_left_map (fun l (l', v) -> (l @ l', v)) [] l in
-      let tuple : value = Tuple t in
-      (l, tuple)
-  | Cted { c; t } ->
-      let++ l, v = expand gen t in
-      let silly : value = Cted { c; v } in
-      (l, silly)
-  | App { omega; t } ->
-      let++ l, v = expand gen t in
-      let name : value = Var ("_" ^ chars_of_int (fresh gen)) in
-      ((name, omega, v) :: l, name)
-  | Let _ -> Error "nested let is not supported (yet)"
-  | LetIso _ -> Error "nested iso binding is not supported (yet)"
-
-let rec expand_expr (gen : generator) : expr_intermediate -> expr myresult =
+let rec pp_base map fmt =
+  let f = Format.fprintf in
+  let m x = Util.IntMap.find x map in
   function
-  | IValue t ->
-      let++ l, v = expand gen t in
-      let init : expr = Value v in
-      List.fold_left
-        (fun e (p_1, omega, p_2) : expr -> Let { p_1; omega; p_2; e })
-        init l
-  | ILet { p_1; p_2; e } ->
-      let** l, v = expand gen p_2 in
-      let++ e = expand_expr gen e in
-      let init = LetVal { p = p_1; v; e } in
-      List.fold_left
-        (fun e (p_1, omega, p_2) : expr -> Let { p_1; omega; p_2; e })
-        init l
+  | BaseUnit -> f fmt "unit"
+  | BaseIdent x -> f fmt "%s" (m x)
+  | BaseVar v -> f fmt "'%s" (m v)
+  | BaseProd List2.(a :: aa) ->
+      begin match a with
+      | BaseUnit | BaseIdent _ | BaseVar _ | BaseApp _ ->
+          f fmt "%a" (pp_base map) a
+      | BaseProd _ -> f fmt "(%a)" (pp_base map) a
+      end;
+      List.iter
+        begin fun a ->
+          match a with
+          | BaseUnit | BaseIdent _ | BaseVar _ | BaseApp _ ->
+              f fmt " * %a" (pp_base map) a
+          | BaseProd _ -> f fmt " * (%a)" (pp_base map) a
+        end
+        (List1.to_list aa)
+  | BaseApp (List1.(a :: aa), x) ->
+      begin match aa with
+      | [] ->
+          begin match a with
+          | BaseProd _ -> f fmt "(%a) %s" (pp_base map) a (m x)
+          | BaseUnit | BaseIdent _ | BaseVar _ | BaseApp _ ->
+              f fmt "%a %s" (pp_base map) a (m x)
+          end
+      | _ ->
+          f fmt "(%a" (pp_base map) a;
+          List.iter (f fmt ", %a" (pp_base map)) aa;
+          f fmt ") %s" (m x)
+      end
+
+let create_map_base ts =
+  let fv = List.map fv_base_list ts |> List.flatten in
+  let map = Alpha.create_alphabet () in
+  List.iter
+    begin fun v ->
+      let _ = Alpha.get_alphabet map v in
+      ()
+    end
+    fv;
+  Alpha.destruct_alphabet map
+
+let rec pp_iso map fmt =
+  let f = Format.fprintf in
+  let m x = Util.IntMap.find x map in
+  function
+  | IsoBiArrow (a, b) -> f fmt "%a <-> %a" (pp_base map) a (pp_base map) b
+  | IsoArrow (t_1, t_2) ->
+      begin match t_1 with
+      | IsoBiArrow _ | IsoArrow _ -> f fmt "(%a)" (pp_iso map) t_1
+      | IsoVar _ | IsoInv _ -> f fmt "%a" (pp_iso map) t_1
+      end;
+      begin match t_2 with
+      | IsoBiArrow _ -> f fmt " -> (%a)" (pp_iso map) t_2
+      | IsoArrow _ | IsoVar _ | IsoInv _ -> f fmt " -> %a" (pp_iso map) t_2
+      end
+  | IsoVar v -> f fmt "'%s" (m v)
+  | IsoInv t ->
+      begin match t with
+      | IsoBiArrow _ | IsoArrow _ -> f fmt "~(%a)" (pp_iso map) t
+      | IsoVar _ | IsoInv _ -> f fmt "~%a" (pp_iso map) t
+      end
+
+let create_map_iso ts =
+  let fv = List.map fv_iso_sep_list ts |> List.flatten in
+  let map_base = Alpha.create_alphabet () in
+  let map_iso = Alpha.create_alphabet () in
+  List.iter
+    begin function
+      | `Base v ->
+          let _ = Alpha.get_alphabet map_base v in
+          ()
+      | `Iso v ->
+          let _ = Alpha.get_alphabet_upper map_iso v in
+          ()
+    end
+    fv;
+  Util.union
+    ~weak:(Alpha.destruct_alphabet map_base)
+    ~strong:(Alpha.destruct_alphabet map_iso)
+
+let rec push_inv = function
+  | (IsoBiArrow _ | IsoVar _ | IsoInv (IsoVar _)) as t -> t
+  | IsoArrow (t_1, t_2) -> IsoArrow (push_inv t_1, push_inv t_2)
+  | IsoInv ((IsoBiArrow _ | IsoArrow _) as t) -> invert t |> push_inv
+  | IsoInv (IsoInv t) -> t |> push_inv

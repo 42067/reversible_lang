@@ -1,23 +1,26 @@
+type nat             = Z (* 0 *) | S (* n *) of nat
+type 'a list         = Nil (* [] *) | Cons (* :: *) of 'a * 'a list
 type bool            = False | True
 type ('l, 'r) either = Left of 'l | Right of 'r
-type 'a list         = Nil (* [] *) | Cons (* :: *) of 'a * 'a list
-type nat             = Z (* 0 *) | S (* n *) of nat
+;;
 
 iso rec run_length eq = case
 | []      <-> []
 | x :: xs <->
   let branched = match (x, run_length eq xs) with
     | (x, [])           <-> Left x
-    | (x, (y, n) :: ys) <->
-      let l = match (eq (x, y), n, ys) with
+    | (x, (y, n) :: ys) <-> Right begin
+        match (eq (x, y), n, ys) with
         | ((True, (x, x)), n, ys)  <-> (x, S n) :: ys
         | ((False, (x, y)), n, ys) <-> (x, 0) :: (y, n) :: ys
-      in Right l
-  in let x :: xs = match branched with
+      end
+  in
+  let x :: xs = match branched with
     | Left x                    <-> [(x, 0)]
     | Right ((x, S n) :: ys)    <-> (x, S n) :: ys
     | Right ((x, 0) :: y :: ys) <-> (x, 0) :: y :: ys
-  in x :: xs
+  in
+  x :: xs
 in
 
 iso rec nat_eq = case
@@ -27,5 +30,9 @@ iso rec nat_eq = case
 | (S m, S n) <-> let (b, (m, n)) = nat_eq (m, n) in (b, (S m, S n))
 in
 
-inv {run_length nat_eq} [(2, 3); (1, 0); (5, 2)]
+let first = inv (run_length nat_eq) [(2, 3); (1, 0); (5, 2)] in
+
+let second = run_length nat_eq [3; 3; 3; 2] in
+
+(first, second)
 

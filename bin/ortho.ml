@@ -1,155 +1,83 @@
-open Types
-open Util
+type subst = Terms.pat * int
+type eq = Terms.pat * Terms.pat
+type ok = { linear : bool; left : bool; right : bool }
 
-type equation = value * value
-type subst = { what : string; into : value }
+let rec subst_pat ((p, x) as s) : Terms.pat -> Terms.pat = function
+  | PatUnit -> PatUnit
+  | PatCtor c -> PatCtor c
+  | PatVar y -> if y = x then p else PatVar y
+  | PatApp (c, p) -> PatApp (c, subst_pat s p)
+  | PatTuple l -> PatTuple (List2.map (subst_pat s) l)
 
-let rec subst (s : subst) : value -> value = function
-  | Unit -> Unit
-  | Var x when x = s.what -> s.into
-  | Var x -> Var x
-  | Ctor x -> Ctor x
-  | Cted { c; v } -> Cted { c; v = subst s v }
-  | Tuple l -> Tuple (List.map (subst s) l)
+let subst_eq s (p, q) = (subst_pat s p, subst_pat s q)
+let subst_eqs s l = List.map (subst_eq s) l
 
-let subst_in_equations (s : subst) : equation list -> equation list =
-  List.map (fun (a, b) -> (subst s a, subst s b))
-
-let rec subst_in_expr ~(what : string) ~(into : string) : expr -> expr =
-  function
-  | Value v -> Value (subst { what; into = Var into } v)
-  | Let { p_1; omega; p_2; e } when contains_value what p_1 ->
-      Let { p_1; omega; p_2 = subst { what; into = Var into } p_2; e }
-  | Let { p_1; omega; p_2; e } ->
-      Let
-        {
-          p_1;
-          omega;
-          p_2 = subst { what; into = Var into } p_2;
-          e = subst_in_expr ~what ~into e;
-        }
-  | LetVal { p; v; e } when contains_value what p ->
-      LetVal { p; v = subst { what; into = Var into } v; e }
-  | LetVal { p; v; e } ->
-      LetVal
-        {
-          p;
-          v = subst { what; into = Var into } v;
-          e = subst_in_expr ~what ~into e;
-        }
-
-let rec occurs (x : string) : value -> bool = function
-  | Unit -> false
-  | Var y -> x = y
-  | Ctor _ -> false
-  | Cted { v; _ } -> occurs x v
-  | Tuple l -> List.exists (occurs x) l
-
-let is_free (x : string) (v : value) : bool = not (occurs x v)
-
-let rec unify : equation list -> (subst list, unit) result = function
-  | [] -> Ok []
-  | e :: e' -> begin
+let rec unify : eq list -> subst list option = function
+  | [] -> Some []
+  | e :: es -> begin
+      let open Util in
       match e with
-      | a, b when a = b -> unify e'
-      | Var x, b when is_free x b ->
-          let s = { what = x; into = b } in
-          let++ unified = subst_in_equations s e' |> unify in
+      | a, b when a = b -> unify es
+      | PatVar x, b when Terms.is_fv_pat x b |> not ->
+          let s = (b, x) in
+          let+ unified = subst_eqs s es |> unify in
           s :: unified
-      | a, Var x when is_free x a ->
-          let s = { what = x; into = a } in
-          let++ unified = subst_in_equations s e' |> unify in
+      | a, PatVar x when Terms.is_fv_pat x a |> not ->
+          let s = (a, x) in
+          let+ unified = subst_eqs s es |> unify in
           s :: unified
-      | Cted { c = c_1; v = v_1 }, Cted { c = c_2; v = v_2 } when c_1 = c_2 ->
-          (v_1, v_2) :: e' |> unify
-      | Tuple a, Tuple b when List.compare_lengths a b = 0 ->
-          List.combine a b @ e' |> unify
-      | _ -> Error ()
+      | PatApp (c_1, p_1), PatApp (c_2, p_2) when c_1 = c_2 ->
+          (p_1, p_2) :: es |> unify
+      | PatTuple a, PatTuple b when List2.eq_length a b ->
+          (List2.combine a b |> List2.to_list) @ es |> unify
+      | _ -> None
     end
 
-let rec reduce : subst list -> subst list = function
-  | [] -> []
-  | s :: s' ->
-      let s' =
-        List.map (fun { what; into } -> { what; into = subst s into }) s'
-        |> reduce
-      in
-      s :: s'
+let is_ortho e = unify [ e ] |> Option.is_none
 
-let is_orthogonal (u : value) (v : value) : unit myresult =
-  let gen = new_generator () in
+let rec is_ortho_all_perm = function
+  | [] -> true
+  | p :: ps ->
+      let ok = List.fold_left (fun ok p' -> ok && is_ortho (p, p')) true ps in
+      ok && is_ortho_all_perm ps
 
-  let convert_value v =
-    let fresh_name () =
-      let lmao : value = Var (chars_of_int (fresh gen)) in
-      lmao
-    in
-    let vars = collect_vars v |> StrSet.of_list in
-    let substs =
-      StrSet.fold
-        (fun x substs -> { what = x; into = fresh_name () } :: substs)
-        vars []
-    in
-    List.fold_left (fun v s -> subst s v) v substs
+let is_linear (p, e) =
+  let rec vs_positive = function
+    | Terms.ExprPat p -> []
+    | Terms.ExprLet { p_1; e } -> Terms.fv_pat p_1 @ vs_positive e
+    | Terms.ExprLetApp { p_1; e } -> Terms.fv_pat p_1 @ vs_positive e
   in
-
-  let u' = convert_value u in
-  let v' = convert_value v in
-
-  match unify [ (u', v') ] with
-  | Ok l ->
-      let msg =
-        show_value u' ^ " and " ^ show_value v' ^ " are not orthogonal"
-        ^ "\nexample: "
-        ^ show_list
-            (fun { what; into } -> what ^ " = " ^ show_value into)
-            (List.rev l |> reduce
-            |> List.sort (fun l r -> compare l.what r.what))
-        ^ "\nsource: " ^ show_value u ^ " and " ^ show_value v
-      in
-      Error msg
-  | Error () -> Ok ()
-
-let convert_pair ((v, e) : value * expr) : value * expr =
-  let gen = new_generator () in
-
-  (* ' is needed for creating fresh names due to the let exprs *)
-  let fresh_name () = "'" ^ chars_of_int (fresh gen) in
-  let substs = collect_vars v |> List.map (fun x -> (x, fresh_name ())) in
-  let v =
-    List.fold_left
-      (fun v (what, into) -> subst { what; into = Var into } v)
-      v substs
+  let rec vs_negative = function
+    | Terms.ExprPat p -> Terms.fv_pat p
+    | Terms.ExprLet { p_2; e } -> Terms.fv_pat p_2 @ vs_negative e
+    | Terms.ExprLetApp { p_2; e } -> Terms.fv_pat p_2 @ vs_negative e
   in
-  let e =
-    List.fold_left (fun e (what, into) -> subst_in_expr ~what ~into e) e substs
+  let positive = Terms.fv_pat p @ vs_positive e in
+  let negative = vs_negative e in
+  let module Counter = Hashtbl.Make (Int) in
+  let counter = Counter.create 0 in
+  let increment x =
+    match Counter.find_opt counter x with
+    | None -> Counter.add counter x 1
+    | Some y -> Counter.replace counter x (y + 1)
   in
-
-  let rec process_expr : expr -> expr =
-    let process p_1 e =
-      let vars = collect_vars p_1 in
-      let substs = List.map (fun x -> (x, fresh_name ())) vars in
-      let p_1 =
-        List.fold_left
-          (fun p (what, into) -> subst { what; into = Var into } p)
-          p_1 substs
-      in
-      let e =
-        List.fold_left
-          (fun e (what, into) -> subst_in_expr ~what ~into e)
-          e substs
-      in
-      let e = process_expr e in
-      (p_1, e)
-    in
-    function
-    | Value e -> Value e
-    | Let { p_1; omega; p_2; e } ->
-        let p_1, e = process p_1 e in
-        Let { p_1; omega; p_2; e }
-    | LetVal { p; v; e } ->
-        let p, e = process p e in
-        LetVal { p; v; e }
+  let decrement x =
+    match Counter.find_opt counter x with
+    | None -> Counter.add counter x (-1)
+    | Some y -> Counter.replace counter x (y - 1)
   in
+  List.iter increment positive;
+  List.iter decrement negative;
+  Counter.fold (fun _key value acc -> acc && value = 0) counter true
 
-  (v, process_expr e)
+let auto l =
+  let linear =
+    List.fold_left (fun acc ((p, e) as b) -> acc && is_linear b) true l
+  in
+  let ps_left, es = List.split l in
+  let ps_right = List.map Terms.pat_of_expr es in
+  {
+    linear;
+    left = is_ortho_all_perm ps_left;
+    right = is_ortho_all_perm ps_right;
+  }

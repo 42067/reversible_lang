@@ -1,2 +1,2 @@
 (library
- (name reversible_lang))
+ (name pisolang))

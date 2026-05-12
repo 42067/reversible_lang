@@ -1,8 +1,6 @@
-type bool            = False | True
-type 'a option       = None | Some of 'a
-type ('l, 'r) either = Left of 'l | Right of 'r
-type 'a list         = Nil (* [] *) | Cons (* :: *) of 'a * 'a list
-type nat             = Z (* 0 *) | S (* n *) of nat
+type nat     = Z (* 0 *) | S (* n *) of nat
+type 'a list = Nil (* [] *) | Cons (* :: *) of 'a * 'a list
+;;
 
 iso rec len = case
 | []      <-> (0, [])
@@ -10,8 +8,8 @@ iso rec len = case
 in
 
 iso rec map f = case
-| []     <-> []
-| h :: t <-> f h :: map f t
+| []      <-> []
+| x :: xs <-> f x :: map f xs
 in
 
 iso rec double = case
@@ -19,22 +17,22 @@ iso rec double = case
 | x :: xs <-> x :: x :: double xs
 in
 
-iso rec rev' = case
+iso rec rev_aux = case
 | (l, (0, []))        <-> (l, (0, []))
 | (l, (S n, x :: xs)) <->
-  let (l, (n, xs)) = rev' (x :: l, (n, xs)) in
+  let (l, (n, xs)) = rev_aux (x :: l, (n, xs)) in
   (l, (S n, xs))
 in
 
-iso rev = case l <->
-  let (l, (n, [])) = rev' ([], len l) in
+iso rev (l) =
+  let (l, (n, [])) = rev_aux ([], len l) in
   inv len (n, l)
 in
 
 iso rec foldl_map f = case
 | (acc, [])      <-> (acc, [])
 | (acc, x :: xs) <->
-  let (acc, x) = f (acc, x) in
+  let (acc, x)  = f (acc, x) in
   let (acc, xs) = foldl_map f (acc, xs) in
   (acc, x :: xs)
 in
@@ -55,34 +53,37 @@ in
 
 iso merge = inv split in
 
-iso rec partition' = case
+iso rec partition_aux = case
 | (l, r, 0)         <-> (l, r, 0)
 | (l, x :: xs, S n) <->
-  let (l, xs, n) = partition' (x :: l, xs, n) in
+  let (l, xs, n) = partition_aux (x :: l, xs, n) in
   (l, xs, S n)
 in
 
-iso partition = case (r, n) <->
-  let (l, r, n) = partition' ([], r, n) in
-  (rev (inv len (n, l)), r)
+iso partition (r, n) =
+  let (l, r, n) = partition_aux ([], r, n) in
+  (inv len (n, l) |> rev, r)
 in
 
 iso concat = inv partition in
 
-(* add (m, n) = (m + n, n) *)
+iso rec init_aux f = case
+| (0, acc)   <-> (0, acc)
+| (S n, acc) <->
+  let (m, n) = (n, n) in
+  let (n, acc) = init_aux f (n, f m :: acc) in
+  (S n, acc)
+in
+
+iso init f (n) = init_aux f (n, []) |> inv len in
+
+(* 'add (m, n) = (m + n, n) *)
 iso rec add = case
 | (m, S n) <-> let (m, n) = add (S m, n) in (m, S n)
 | (m, 0)   <-> (m, 0)
 in
 
-iso rec sum = case l <-> foldl_map add (0, l) in
-
-iso rec iota' = case
-| 0   <-> []
-| S n <-> let (n, n') = (n, n) in n :: iota' n'
-in
-
-iso iota = case n <-> rev (iota' n) in
+iso sum (l) = foldl_map add (0, l) in
 
 iso rec push_back = case
 | ([], y)      <-> [y]
@@ -91,5 +92,5 @@ iso rec push_back = case
   x :: y :: xs
 in
 
-double (iota 5)
+init (case x <-> (x, S x)) 8
 

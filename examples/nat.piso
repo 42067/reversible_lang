@@ -1,31 +1,30 @@
+type nat             = Z (* 0 *) | S (* n *) of nat
+type 'a list         = Nil (* [] *) | Cons (* :: *) of 'a * 'a list
 type bool            = False | True
 type 'a option       = None | Some of 'a
 type ('l, 'r) either = Left of 'l | Right of 'r
-type 'a list         = Nil (* [] *) | Cons (* :: *) of 'a * 'a list
-type nat             = Z (* 0 *) | S (* n *) of nat
 type ord             = Lt | Eq | Gt
 type parity          = Even | Odd
+;;
 
 iso rec parity = case
 | 0       <-> (Even, 0)
 | 1       <-> (Odd, 1)
-| S (S x) <-> let (b, x) = parity x in (b, S (S x))
+| S (S n) <-> let (b, n) = parity n in (b, S (S n))
 in
 
-(* add (x, y) = (x + y, y) *)
+(* 'add (m, n) = (m + n, n) *)
 iso rec add = case
 | (m, 0)   <-> (m, 0)
 | (m, S n) <-> let (m, n) = add (S m, n) in (m, S n)
 in
 
-iso rec cantor_pairing = case x <->
-  let y = match x with
+iso rec cantor_pairing (x) =
+  match match x with
     | (S i, j) <-> Some (i, S j)
     | (0, S j) <-> Some (j, 0)
     | (0, 0)   <-> None
-  in match y with
-    | Some x <-> S (cantor_pairing x)
-    | None   <-> 0
+  with Some n <-> S (cantor_pairing n) | None <-> 0
 in
 
 iso rec cmp = case
@@ -44,9 +43,9 @@ iso rec halve = case
 in
 
 iso rec fib = case
-| 0 <-> (1, 1)
+| 0   <-> (1, 1)
 | S n <->
-  let (S (S m), n) = add (fib n) in
+  let (S (S m), n) = fib n |> add in
   (n, S (S m))
 in
 

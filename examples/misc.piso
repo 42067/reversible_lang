@@ -1,0 +1,16 @@
+type nat             = Z (* 0 *) | S (* n *) of nat
+type 'a list         = Nil (* [] *) | Cons (* :: *) of 'a * 'a list
+type bool            = False | True
+type 'a option       = None | Some of 'a
+type ('l, 'r) either = Left of 'l | Right of 'r
+;;
+
+iso id (x) = x in
+iso swap (x, y) = (y, x) in
+iso conj f g = inv f . g . f in
+iso mirror = case Left x <-> Right x | Right x <-> Left x in
+iso incr (x) = S x in
+iso make_invl f = conj f swap in
+
+Left (0, 0) |> incr . incr * incr + id . incr
+

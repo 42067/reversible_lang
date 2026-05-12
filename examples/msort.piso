@@ -1,8 +1,9 @@
-type bool    = False | True
-type 'a list = Nil (* [] *) | Cons (* :: *) of 'a * 'a list
 type nat     = Z (* 0 *) | S (* n *) of nat
+type 'a list = Nil (* [] *) | Cons (* :: *) of 'a * 'a list
+type bool    = False | True
+;;
 
-iso recover f = case i <->
+iso recover f (i) =
   let (o, g) = f i in
   let (o, o') = (o, o) in
   (o, inv f (o', g))
@@ -15,10 +16,10 @@ iso rec merge leq = case
 | (x :: xs, y :: ys) <->
   let (xs, g :: g' :: gs) =
     match (leq (x, y), xs, ys) with
-    | ((True, (x, y)), xs, ys)  <->
+    | ((True, x, y), xs, ys)  <->
       let (merged, g) = merge leq (xs, y :: ys) in
       (x :: merged, False :: g)
-    | ((False, (x, y)), xs, ys) <->
+    | ((False, x, y), xs, ys) <->
       let (merged, g) = merge leq (x :: xs, ys) in
       (y :: merged, True :: g)
   in (xs, g :: g' :: gs)
@@ -29,28 +30,28 @@ iso rec len = case
 | x :: xs <-> let (n, xs) = len xs in (S n, x :: xs)
 in
 
-iso rec rev' = case
+iso rec rev_aux = case
 | (xs, (0, []))        <-> (xs, (0, []))
 | (xs, (S n, y :: ys)) <->
-  let (xs, (n, ys)) = rev' (y :: xs, (n, ys)) in
+  let (xs, (n, ys)) = rev_aux (y :: xs, (n, ys)) in
   (xs, (S n, ys))
 in
 
-iso rev = case xs <->
-  let (xs, (n, [])) = rev' ([], len xs) in
+iso rev (xs) =
+  let (xs, (n, [])) = rev_aux ([], len xs) in
   inv len (n, xs)
 in
 
-iso rec partition' = case
+iso rec partition_aux = case
 | (xs, ys, 0)        <-> (xs, ys, 0)
 | (xs, y :: ys, S n) <->
-  let (xs, ys, n) = partition' (y :: xs, ys, n) in
+  let (xs, ys, n) = partition_aux (y :: xs, ys, n) in
   (xs, ys, S n)
 in
 
-iso partition = case (xs, n) <->
-  let (xs, ys, n) = partition' ([], xs, n) in
-  (rev (inv len (n, xs)), ys)
+iso partition (xs, n) =
+  let (xs, ys, n) = partition_aux ([], xs, n) in
+  (inv len (n, xs) |> rev, ys)
 in
 
 iso rec halve = case
@@ -59,31 +60,31 @@ iso rec halve = case
 | S (S n) <-> let (m, n) = halve n in (S m, S n)
 in
 
-iso split = case xs <->
-  let (n, xs) = len xs in
-  let (m, n) = halve n in
+iso split (xs) =
+  let (n, xs)  = len xs in
+  let (m, n)   = halve n in
   let (xs, ys) = partition (xs, m) in
   (xs, inv len (n, ys))
 in
 
-iso rec msort' leq = case xs <->
+iso rec msort_aux leq (xs) =
   match split xs with
   | ([], [])           <-> ([], [])
   | ([x], [])          <-> ([x], [])
   | (x :: xs, y :: ys) <->
-    let (xs, gx) = msort' leq (x :: xs) in
-    let (ys, gy) = msort' leq (y :: ys) in
+    let (xs, gx) = x :: xs |> msort_aux leq in
+    let (ys, gy) = y :: ys |> msort_aux leq in
     let (xs, g) = merge leq (xs, ys) in
     (xs, g :: inv split (gx, gy))
 in
 
-iso msort leq = recover {msort' leq} in
+iso msort leq = msort_aux leq |> recover in
 
 iso rec nat_leq = case
-| (0, S n)   <-> (True, (0, S n))
-| (S m, 0)   <-> (False, (S m, 0))
-| (0, 0)     <-> (True, (0, 0))
-| (S m, S n) <-> let (b, (m, n)) = nat_leq (m, n) in (b, (S m, S n))
+| (0, S n)   <-> (True, 0, S n)
+| (S m, 0)   <-> (False, S m, 0)
+| (0, 0)     <-> (True, 0, 0)
+| (S m, S n) <-> let (b, m, n) = nat_leq (m, n) in (b, S m, S n)
 in
 
 msort nat_leq [10; 5; 5; 1; 2; 9; 7; 8; 0; 4; 6; 5; 6]

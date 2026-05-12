@@ -1,15 +1,10 @@
-open Types
-open Util
-
-type equation
 type subst
+type eq
+type ok = { linear : bool; left : bool; right : bool }
 
-val subst : subst -> value -> value
-val subst_in_equations : subst -> equation list -> equation list
-val subst_in_expr : what:string -> into:string -> expr -> expr
-val occurs : string -> value -> bool
-val is_free : string -> value -> bool
-val unify : equation list -> (subst list, unit) result
-val reduce : subst list -> subst list
-val is_orthogonal : value -> value -> unit myresult
-val convert_pair : value * expr -> value * expr
+val subst_pat : subst -> Terms.pat -> Terms.pat
+val unify : eq list -> subst list option
+val is_ortho : Terms.pat * Terms.pat -> bool
+val is_ortho_all_perm : Terms.pat list -> bool
+val is_linear : Terms.pat * Terms.expr -> bool
+val auto : (Terms.pat * Terms.expr) list -> ok

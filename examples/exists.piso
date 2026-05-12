@@ -1,0 +1,29 @@
+type nat       = Z (* 0 *) | S (* n *) of nat
+type 'a list   = Nil (* [] *) | Cons (* :: *) of 'a * 'a list
+type bool      = False | True
+type 'a signed = Neg of 'a | Pos of 'a
+;;
+
+iso id (x) = x in
+
+iso rec map f = case
+| []      <-> []
+| x :: xs <-> f x :: map f xs
+in
+
+iso rec or = case
+| []          <-> (False, [])
+| Pos x :: xs <-> (True, Pos x :: xs)
+| Neg x :: xs <-> let (b, xs) = or xs in (b, Neg x :: xs)
+in
+
+iso exists f = (id * map (inv f)) . or . map f in
+
+iso is_one = case
+| 0       <-> Neg 0
+| 1       <-> Pos 1
+| S (S n) <-> Neg (S (S n))
+in
+
+exists is_one [3; 9; 0; 1; 5; 4; 4]
+

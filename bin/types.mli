@@ -1,78 +1,30 @@
-open Util
+type base =
+  | BaseUnit
+  | BaseIdent of int
+  | BaseVar of int
+  | BaseProd of base List2.t
+  | BaseApp of base List1.t * int
 
-type base_type =
-  | Unit
-  | Product of base_type list
-  | Named of string
-  | Var of string
-  | Ctor of base_type list * string
+type iso =
+  | IsoBiArrow of base * base
+  | IsoArrow of iso * iso
+  | IsoVar of int
+  | IsoInv of iso
 
-type iso_type =
-  | BiArrow of { a : base_type; b : base_type }
-  | Arrow of { t_1 : iso_type; t_2 : iso_type }
-  | Var of string
+type 'a subst = 'a * int
 
-type value =
-  | Unit
-  | Var of string
-  | Ctor of string
-  | Cted of { c : string; v : value }
-  | Tuple of value list
-
-type expr =
-  | Value of value
-  | Let of { p_1 : value; omega : iso; p_2 : value; e : expr }
-  | LetVal of { p : value; v : value; e : expr }
-
-and iso =
-  | Pairs of (value * expr) list
-  | Fix of { phi : string; omega : iso }
-  | Lambda of { psi : string; omega : iso }
-  | Var of string
-  | App of { omega_1 : iso; omega_2 : iso }
-  | Invert of iso
-
-type term =
-  | Unit
-  | Var of string
-  | Ctor of string
-  | Cted of { c : string; t : term }
-  | Tuple of term list
-  | App of { omega : iso; t : term }
-  | Let of { p : value; t_1 : term; t_2 : term }
-  | LetIso of { phi : string; omega : iso; t : term }
-
-type expr_intermediate =
-  | IValue of term
-  | ILet of { p_1 : value; p_2 : term; e : expr_intermediate }
-
-type variant = Value of string | Iso of { c : string; a : base_type }
-type typedef = { vars : string list; t : string; vs : variant list }
-type program = { ts : typedef list; t : term }
-type generator
-
-val term_of_value : value -> term
-val term_of_expr : expr -> term
-val value_of_expr : expr -> value
-val contains_value : string -> value -> bool
-val contains_pairs : string -> (value * expr) list -> bool
-val lambdas_of_params : string list -> iso -> iso
-val is_list_value : value -> bool
-val is_list_term : term -> bool
-val is_int_value : value -> bool
-val is_int_term : term -> bool
-val show_base_type : base_type -> string
-val show_iso_type : iso_type -> string
-val show_value : value -> string
-val show_expr : expr -> string
-val show_pairs : (value * expr) list -> string
-val show_iso : iso -> string
-val show_pairs_lhs : value -> (value * expr) list -> string
-val show_term : term -> string
-val nat_of_int : int -> value
-val build_storage : 'a -> value -> 'a option StrMap.t
-val collect_vars : value -> string list
-val new_generator : unit -> generator
-val fresh : generator -> int
-val expand : generator -> term -> ((value * iso * value) list * value) myresult
-val expand_expr : generator -> expr_intermediate -> expr myresult
+val is_fv_base : int -> base -> bool
+val is_fv_iso : int -> iso -> bool
+val invert : iso -> iso
+val fv_base : base -> Util.IntSet.t
+val fv_iso : iso -> Util.IntSet.t
+val subst_base : base subst -> base -> base
+val subst_iso : iso subst -> iso -> iso
+val subst_base_iso : base subst -> iso -> iso
+val subst_base_bulk : base subst list -> base -> base
+val subst_iso_bulk : iso subst list -> base subst list -> iso -> iso
+val pp_base : string Util.IntMap.t -> Format.formatter -> base -> unit
+val pp_iso : string Util.IntMap.t -> Format.formatter -> iso -> unit
+val create_map_base : base list -> string Util.IntMap.t
+val create_map_iso : iso list -> string Util.IntMap.t
+val push_inv : iso -> iso

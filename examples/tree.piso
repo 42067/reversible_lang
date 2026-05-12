@@ -1,0 +1,44 @@
+type nat     = Z (* 0 *) | S (* n *) of nat
+type 'a list = Nil (* [] *) | Cons (* :: *) of 'a * 'a list
+type bool    = False | True
+type 'a tree = Leaf | Node of 'a tree * 'a * 'a tree
+;;
+
+iso rec insert lt = case
+| (Leaf, x)           <-> (Node (Leaf, x, Leaf), [])
+| (Node (l, c, r), x) <->
+  let (t, g :: gs) =
+    match (lt (c, x), l, r) with
+    | ((False, c, x), l, r) <->
+      let (l, gs) = insert lt (l, x) in
+      (Node (l, c, r), False :: gs)
+    | ((True, c, x), l, r) <->
+      let (r, gs) = insert lt (r, x) in
+      (Node (l, c, r), True :: gs)
+  in (t, g :: gs)
+in
+
+iso rec tree_of_list lt = case
+| []      <-> (Leaf, [])
+| x :: xs <->
+  let (t, gs) = tree_of_list lt xs in
+  let (Node t, gs') = insert lt (t, x) in
+  (Node t, gs' :: gs)
+in
+
+iso recover f (i) =
+  let (o, g) = f i in
+  let (o, o') = (o, o) in
+  (o, inv f (o', g))
+in
+
+iso rec nat_lt = case
+| (0, S n)   <-> (True, 0, S n)
+| (S m, 0)   <-> (False, S m, 0)
+| (0, 0)     <-> (False, 0, 0)
+| (S m, S n) <->
+  let (b, m, n) = nat_lt (m, n) in (b, S m, S n)
+in
+
+recover (tree_of_list nat_lt) [1; 2; 6; 7; 0; 4; 3; 5]
+
