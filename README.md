@@ -1,6 +1,6 @@
 # PisoLang
 
-[Actively developped version](https://github.com/Suikaaah/pisolang)
+[Actively developed version](https://github.com/Suikaaah/pisolang)
 
 Piso (pie-so) Lang is a reversible functional programming language based on [1].
 Our main objective is to make reversible programming more accessible for all users.
