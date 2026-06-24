@@ -2,19 +2,18 @@ type nat     = Z (* 0 *) | S (* n *) of nat
 type 'a list = Nil (* [] *) | Cons (* :: *) of 'a * 'a list
 type bool    = False | True
 type q       = Init | Next | Flip | Done | Back | Final
-type s       = B | A0 | A1 | A2 | A3
 ;;
 
 iso delta = case
-| (Init, (l, B, r))       <-> (Next, (l, B, r))
+| (Init, (l, ' ', r))     <-> (Next, (l, ' ', r))
 | (Next, (l, s, s' :: r)) <-> (Flip, (s :: l, s', r))
-| (Flip, (l, A0, r))      <-> (Next, (l, A1, r))
-| (Flip, (l, A1, r))      <-> (Next, (l, A0, r))
-| (Flip, (l, B, r))       <-> (Back, (l, B, r))
+| (Flip, (l, 'T', r))     <-> (Next, (l, 'F', r))
+| (Flip, (l, 'F', r))     <-> (Next, (l, 'T', r))
+| (Flip, (l, ' ', r))     <-> (Back, (l, ' ', r))
 | (Back, (s' :: l, s, r)) <-> (Done, (l, s', s :: r))
-| (Done, (l, A0, r))      <-> (Back, (l, A0, r))
-| (Done, (l, A1, r))      <-> (Back, (l, A1, r))
-| (Done, (l, B, r))       <-> (Final, (l, B, r))
+| (Done, (l, 'T', r))     <-> (Back, (l, 'T', r))
+| (Done, (l, 'F', r))     <-> (Back, (l, 'F', r))
+| (Done, (l, ' ', r))     <-> (Final, (l, ' ', r))
 in
 
 iso delta_fwd (c) = match delta c with
@@ -36,12 +35,10 @@ iso delta_bwd (c) = match inv delta c with
 in
 
 iso rec rm_blank = case
-| []      <-> ([], 0)
-| B  :: t <-> let ([], n) = rm_blank t in ([], S n)
-| A0 :: t <-> let (t, n)  = rm_blank t in (A0 :: t, n)
-| A1 :: t <-> let (t, n)  = rm_blank t in (A1 :: t, n)
-| A2 :: t <-> let (t, n)  = rm_blank t in (A2 :: t, n)
-| A3 :: t <-> let (t, n)  = rm_blank t in (A3 :: t, n)
+| ""       <-> ("", 0)
+| ' ' :: t <-> let ("", n) = rm_blank t in ("", S n)
+| 'T' :: t <-> let (t, n)  = rm_blank t in ('T' :: t, n)
+| 'F' :: t <-> let (t, n)  = rm_blank t in ('F' :: t, n)
 in
 
 iso clean_up ((x, (l, y, r)), g) =
@@ -51,7 +48,7 @@ iso clean_up ((x, (l, y, r)), g) =
 in
 
 iso rec extend_if_empty = case
-| []      <-> ([B], True)
+| ""      <-> (" ", True)
 | x :: xs <-> (x :: xs, False)
 in
 
@@ -85,9 +82,9 @@ iso compute = rm_garb
 in
 
 iso sem (tape) =
-  let (Final, ([], B, tape)) = compute (Init, ([], B, tape)) in
+  let (Final, ([], ' ', tape)) = compute (Init, ([], ' ', tape)) in
   tape
 in
 
-sem [A0; A0; A0; A1; A1; A0; A1; A0]
+sem "TTTFFTFT"
 

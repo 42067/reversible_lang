@@ -4,6 +4,7 @@ type base =
   | BaseVar of int
   | BaseProd of base List2.t
   | BaseApp of base List1.t * int
+  | BaseChar
 
 type iso =
   | IsoBiArrow of base * base

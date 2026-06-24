@@ -37,3 +37,5 @@ let rec all_ok l =
   List.fold_left
     (fun acc -> function Ok _ -> acc | Error e -> Error e)
     (Ok ()) l
+
+let char_list_of_string s = List.init (String.length s) (String.get s)

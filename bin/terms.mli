@@ -4,12 +4,14 @@ type pat =
   | PatCtor of int
   | PatApp of int * pat
   | PatTuple of pat List2.t
+  | PatChar of char
 
 type value =
   | ValueUnit
   | ValueCtor of int
   | ValueApp of int * value
   | ValueTuple of value List2.t
+  | ValueChar of char
 
 type expr =
   | ExprPat of pat
@@ -33,6 +35,7 @@ and term =
   | TermIsoApp of iso * term
   | TermLet of { p : pat; t_1 : term; t_2 : term }
   | TermIso of { phi : int; omega : iso; t : term }
+  | TermChar of char
 
 type 'a subst = 'a * int
 

@@ -10,6 +10,7 @@ struct
     | PatCtor of t
     | PatApp of t * pat
     | PatTuple of pat List2.t
+    | PatChar of char
 
   type epat =
     | EPatUnit
@@ -18,6 +19,7 @@ struct
     | EPatCtorApp of t * epat
     | EPatTuple of epat List2.t
     | EPatIsoApp of iso * epat
+    | EPatChar of char
 
   and expr = ExprEPat of epat | ExprLet of { p : pat; ep : epat; e : expr }
 
@@ -38,6 +40,7 @@ struct
     | TermIsoApp of iso * term
     | TermLet of { p : pat; t_1 : term; t_2 : term }
     | TermIso of { phi : t; omega : iso; t : term }
+    | TermChar of char
 
   type base =
     | BaseUnit
@@ -45,6 +48,7 @@ struct
     | BaseVar of t
     | BaseProd of base List2.t
     | BaseApp of base List1.t * t
+    | BaseChar
 
   type variant = t * base option
   type typedef = { params : t list; name : t; variants : variant list }
@@ -60,6 +64,7 @@ let rec cvt_pat alpha : MStr.pat -> MInt.pat = function
   | PatCtor c -> PatCtor (Alpha.get alpha c)
   | PatApp (c, p) -> PatApp (Alpha.get alpha c, cvt_pat alpha p)
   | PatTuple l -> PatTuple (List2.map (cvt_pat alpha) l)
+  | PatChar c -> PatChar c
 
 let rec cvt_term alpha : MStr.term -> MInt.term = function
   | TermUnit -> TermUnit
@@ -82,6 +87,7 @@ let rec cvt_term alpha : MStr.term -> MInt.term = function
           omega = cvt_iso alpha omega;
           t = cvt_term alpha t;
         }
+  | TermChar c -> TermChar c
 
 and cvt_iso alpha : MStr.iso -> MInt.iso = function
   | IsoVar phi -> IsoVar (Alpha.get alpha phi)
@@ -107,6 +113,7 @@ and cvt_epat alpha : MStr.epat -> MInt.epat = function
   | EPatCtorApp (c, ep) -> EPatCtorApp (Alpha.get alpha c, cvt_epat alpha ep)
   | EPatTuple l -> EPatTuple (List2.map (cvt_epat alpha) l)
   | EPatIsoApp (omega, ep) -> EPatIsoApp (cvt_iso alpha omega, cvt_epat alpha ep)
+  | EPatChar c -> EPatChar c
 
 let rec expand_pat : MInt.pat -> Terms.pat = function
   | PatUnit -> PatUnit
@@ -114,6 +121,7 @@ let rec expand_pat : MInt.pat -> Terms.pat = function
   | PatCtor c -> PatCtor c
   | PatApp (c, p) -> PatApp (c, expand_pat p)
   | PatTuple l -> PatTuple (List2.map expand_pat l)
+  | PatChar c -> PatChar c
 
 let rec cvt_base alpha : MStr.base -> MInt.base = function
   | BaseUnit -> BaseUnit
@@ -121,6 +129,7 @@ let rec cvt_base alpha : MStr.base -> MInt.base = function
   | BaseVar v -> BaseVar (Alpha.get alpha v)
   | BaseProd l -> BaseProd (List2.map (cvt_base alpha) l)
   | BaseApp (l, x) -> BaseApp (List1.map (cvt_base alpha) l, Alpha.get alpha x)
+  | BaseChar -> BaseChar
 
 let cvt_variant alpha ((c, a) : MStr.variant) : MInt.variant =
   (Alpha.get alpha c, Option.map (cvt_base alpha) a)
@@ -151,6 +160,7 @@ let rec pump gen : MInt.epat -> (int * Terms.iso * Terms.pat) list * Terms.pat =
       let s, p = pump gen ep in
       let fresh = Util.fresh gen in
       ((fresh, expand_iso gen omega, p) :: s, PatVar fresh)
+  | EPatChar c -> ([], PatChar c)
 
 and expand_iso gen : MInt.iso -> Terms.iso = function
   | IsoVar phi -> IsoVar phi
@@ -196,6 +206,7 @@ let rec expand_term gen : MInt.term -> Terms.term = function
         }
   | TermIso { phi; omega; t } ->
       TermIso { phi; omega = expand_iso gen omega; t = expand_term gen t }
+  | TermChar c -> TermChar c
 
 let rec base_silly : MInt.base -> Types.base = function
   | BaseUnit -> BaseUnit
@@ -203,6 +214,7 @@ let rec base_silly : MInt.base -> Types.base = function
   | BaseVar v -> BaseVar v
   | BaseProd l -> BaseProd (List2.map base_silly l)
   | BaseApp (l, x) -> BaseApp (List1.map base_silly l, x)
+  | BaseChar -> BaseChar
 
 let alpha_typedef gen MInt.{ params; name; variants } =
   let map =
@@ -215,6 +227,7 @@ let alpha_typedef gen MInt.{ params; name; variants } =
     | BaseVar v -> BaseVar (Util.IntMap.find v map)
     | BaseProd l -> BaseProd (List2.map map_base l)
     | BaseApp (l, x) -> BaseApp (List1.map map_base l, x)
+    | BaseChar -> BaseChar
   in
   let variants' =
     List.map (fun (c, a) -> (c, Option.map map_base a)) variants
@@ -239,7 +252,7 @@ let check_typedefs ~map (ts : MInt.typedef list) : (unit, string) result =
            end
     in
     let rec check_base : MInt.base -> (unit, string) result = function
-      | BaseUnit | BaseVar _ -> Ok ()
+      | BaseUnit | BaseVar _ | BaseChar -> Ok ()
       | BaseIdent x ->
           let open Util in
           let** found = find x in

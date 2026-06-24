@@ -13,7 +13,7 @@ depends: [
   "dune" {>= "3.21"}
   "ocaml"
   "ocamllex"
-  "menhir"
+  "menhir" {>= "20180523"}
   "odoc" {with-doc}
 ]
 build: [

@@ -8,6 +8,7 @@ let rec subst_pat ((p, x) as s) : Terms.pat -> Terms.pat = function
   | PatVar y -> if y = x then p else PatVar y
   | PatApp (c, p) -> PatApp (c, subst_pat s p)
   | PatTuple l -> PatTuple (List2.map (subst_pat s) l)
+  | PatChar c -> PatChar c
 
 let subst_eq s (p, q) = (subst_pat s p, subst_pat s q)
 let subst_eqs s l = List.map (subst_eq s) l

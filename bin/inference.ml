@@ -158,7 +158,7 @@ let rec unify ~map =
 let pat_gen gen p =
   let rec impl gen = function
     | Terms.PatVar v -> [ (v, Types.BaseVar (Util.fresh gen)) ]
-    | Terms.PatUnit | PatCtor _ -> []
+    | Terms.PatUnit | Terms.PatCtor _ | Terms.PatChar _ -> []
     | Terms.PatApp (_, p) -> impl gen p
     | Terms.PatTuple l ->
         List2.map (impl gen) l |> List2.to_list |> List.flatten
@@ -305,6 +305,7 @@ and infer_term ~map gen psi delta =
         e_base = e_base_1 @ e_base_2 @ es_base;
         e_iso = e_iso_1 @ e_iso_2 @ es_iso;
       }
+  | TermChar _ -> { ty = BaseChar; e_base = []; e_iso = [] }
 
 and infer_expr ~map gen psi delta =
   let open Terms in

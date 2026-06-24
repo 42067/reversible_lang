@@ -15,3 +15,4 @@ val create : unit -> generator
 val fresh : generator -> int
 val alphabet : int -> string
 val all_ok : ('a, 'e) result list -> (unit, 'e) result
+val char_list_of_string : string -> char list

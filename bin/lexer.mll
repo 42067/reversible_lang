@@ -11,6 +11,9 @@
 let white = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
 let nat = ['0'-'9']+
+let valid_chars = [' '-'!' '#'-'&' '('-'[' ']'-'~']
+let char = "'" valid_chars "'"
+let string = "\"" valid_chars* "\""
 let comment = "(*" ([^'*'] | '*' [^')'])* "*)"
 let ticked = '\'' ['a'-'z'] ['a'-'z' '0'-'9' '_']*
 let lower = ['a'-'z'] ['a'-'z' '0'-'9' '_' '\'']*
@@ -39,6 +42,7 @@ rule read = parse
   | "begin" { LPAREN }
   | "end" { RPAREN }
   | "unit" { UNIT }
+  | "char" { CHARTYPE }
   | "let" { LET }
   | "iso" { ISO }
   | "in" { IN }
@@ -51,9 +55,13 @@ rule read = parse
   | "match" { MATCH }
   | "with" { WITH }
   | nat { NAT (lexeme lexbuf |> int_of_string) }
+  | char { CHAR (String.get (lexeme lexbuf) 1) }
   | ticked { TICKED (lexeme lexbuf) }
   | lower { LOWER (lexeme lexbuf) }
   | upper { UPPER (lexeme lexbuf) }
+  | string
+    { let buf = lexeme lexbuf in
+      STRING (String.sub buf 1 (String.length buf - 2) |> Util.char_list_of_string) }
 
 {
   let string_of_lb lexbuf =

@@ -7,14 +7,14 @@ Our main objective is to make reversible programming more accessible for all use
 PisoLang is designed to resemble OCaml, while being equipped with the built-in function
 `inv : 'A -> ~'A` that _inverts_ any function.
 
-| Objective                      | Status                                  |
-| :-:                            | :-:                                     |
-| Type inference - soundness     | :white_check_mark:                      |
-| Type safety - preservation     | :white_check_mark:                      |
-| Reversible Turing completeness | :white_check_mark:                      |
-| Partial isomorphism*           | :white_check_mark:                      |
-| Type inference - completeness  | Underway (highly likely to be complete) |
-| Type safety - progress         | Never (due to partiality)               |
+| Objective                      | Status                    |
+| :-:                            | :-:                       |
+| Reversible Turing completeness | :white_check_mark:        |
+| Partial isomorphism*           | :white_check_mark:        |
+| Type inference - soundness     | :white_check_mark:        |
+| Type inference - completeness  | :white_check_mark:        |
+| Type safety - preservation     | :white_check_mark:        |
+| Type safety - progress         | Never (due to partiality) |
 
 *: For any well-typed function `f`,
    `f v` $\rightarrow^\*$ `v'` if and only if `inv f v'` $\rightarrow^\*$ `v`.
@@ -292,6 +292,13 @@ case x <->
 ## Miscellaneous
 
 ```ocaml
+(* some of the ASCII characters are supported *)
+(* they have the primitive type `char` *)
+'a' : char
+
+(* syntactic sugar for char list *)
+"Hello, world!" : char list
+
 (* in order from highest precedence to lowest precedence *)
 f_1 . ... . f_n := case x <-> f_1 (... (f_n x))
 f_1 * ... * f_n := case (x_1, ..., x_n) <-> (f_1 x_1, ..., f_n x_n)
@@ -307,6 +314,7 @@ f + g := case Left x <-> Left (f x) | Right x <-> Right (g x)
 - `isort.piso`: reversible polymorphic insertion sort
 - `list.piso`: polymorphic operations on lists
 - `nat.piso`: operations on natural numbers
+- `serde.piso`: serializers and automatically generated deserializers
 - `misc.piso`: random stuff
 - `tree.piso`: operations on trees
 - `exists.piso`: O(n) search

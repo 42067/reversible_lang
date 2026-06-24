@@ -13,6 +13,18 @@
     if n = 0 then TermCtor "Z"
              else TermCtorApp ("S", nat_of_int_term (n - 1))
 
+  let rec char_list_of_s s =
+    let folder c acc = PatApp ("Cons", PatTuple (List2.of_list [PatChar c; acc])) in
+    List.fold_right folder s (PatCtor "Nil")
+
+  let rec char_list_of_es s =
+    let folder c acc = EPatCtorApp ("Cons", EPatTuple (List2.of_list [EPatChar c; acc])) in
+    List.fold_right folder s (EPatCtor "Nil")
+
+  let rec char_list_of_ts s =
+    let folder c acc = TermCtorApp ("Cons", TermTuple (List2.of_list [TermChar c; acc])) in
+    List.fold_right folder s (TermCtor "Nil")
+
   let rec list_of_ps ps =
     let folder p acc = PatApp ("Cons", PatTuple (List2.of_list [p; acc])) in
     List1.fold_right folder ps (PatCtor "Nil")
@@ -65,10 +77,12 @@
     IsoCase (List1.of_list [(pl, el); (pr, er)])
 %}
 
-%token EOF LPAREN RPAREN LBRACKET RBRACKET DOT TIMES PLUS PIPE COMMA SEMICOLON CONS
-       TRIANGLE ARROW BIARROW EQUAL UNIT LET ISO IN FIX TYPE REC OF FUN CASE MATCH WITH
+%token EOF LPAREN RPAREN LBRACKET RBRACKET DOT TIMES PLUS PIPE COMMA SEMICOLON CONS TRIANGLE
+       ARROW BIARROW EQUAL UNIT CHARTYPE LET ISO IN FIX TYPE REC OF FUN CASE MATCH WITH
 %token <int> NAT
 %token <string> TICKED LOWER UPPER
+%token <char> CHAR
+%token <char list> STRING
 
 %start <program> program
 %type <typedef> typedef
@@ -119,6 +133,7 @@ typedef:
 base_grouped:
   | LPAREN; a = base; RPAREN; { a }
   | UNIT; { BaseUnit }
+  | CHARTYPE; { BaseChar }
   | x = LOWER; { BaseIdent x }
   | v = TICKED; { BaseVar v }
   | a = base_grouped; x = LOWER; { BaseApp (List1.of_list [a], x) }
@@ -135,6 +150,8 @@ variant:
 pat_grouped_novar:
   | LPAREN; p = pat; RPAREN; { p }
   | LPAREN; RPAREN; { PatUnit }
+  | s = STRING; { char_list_of_s s }
+  | c = CHAR; { PatChar c }
   | LPAREN; l = list2(COMMA, pat); RPAREN; { PatTuple l }
   | c = UPPER; { PatCtor c }
   | n = NAT; { nat_of_int_pat n }
@@ -144,6 +161,8 @@ pat_grouped_novar:
 pat_grouped:
   | LPAREN; p = pat; RPAREN; { p }
   | LPAREN; RPAREN; { PatUnit }
+  | s = STRING; { char_list_of_s s }
+  | c = CHAR; { PatChar c }
   | LPAREN; l = list2(COMMA, pat); RPAREN; { PatTuple l }
   | x = LOWER; { PatVar x }
   | c = UPPER; { PatCtor c }
@@ -176,6 +195,8 @@ ambiguous:
 epat_grouped:
   | LPAREN; ep = epat_top; RPAREN; { ep }
   | LPAREN; RPAREN; { EPatUnit }
+  | c = CHAR; { EPatChar c }
+  | s = STRING; { char_list_of_es s }
   | LPAREN; l = list2(COMMA, epat); RPAREN; { EPatTuple l }
   | c = UPPER; { EPatCtor c }
   | n = NAT; { nat_of_int_epat n }
@@ -286,6 +307,8 @@ iso:
 term_grouped:
   | LPAREN; t = term_top; RPAREN; { t }
   | LPAREN; RPAREN; { TermUnit }
+  | c = CHAR; { TermChar c }
+  | s = STRING; { char_list_of_ts s }
   | LPAREN; l = list2(COMMA, term); RPAREN; { TermTuple l }
   | c = UPPER; { TermCtor c }
   | n = NAT; { nat_of_int_term n }

@@ -13,7 +13,7 @@ iso rec parity = case
 | S (S n) <-> let (b, n) = parity n in (b, S (S n))
 in
 
-(* 'add (m, n) = (m + n, n) *)
+(* add (m, n) = (m + n, n) *)
 iso rec add = case
 | (m, 0)   <-> (m, 0)
 | (m, S n) <-> let (m, n) = add (S m, n) in (m, S n)

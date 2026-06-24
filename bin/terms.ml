@@ -4,12 +4,14 @@ type pat =
   | PatCtor of int
   | PatApp of int * pat
   | PatTuple of pat List2.t
+  | PatChar of char
 
 type value =
   | ValueUnit
   | ValueCtor of int
   | ValueApp of int * value
   | ValueTuple of value List2.t
+  | ValueChar of char
 
 type expr =
   | ExprPat of pat
@@ -33,6 +35,7 @@ and term =
   | TermIsoApp of iso * term
   | TermLet of { p : pat; t_1 : term; t_2 : term }
   | TermIso of { phi : int; omega : iso; t : term }
+  | TermChar of char
 
 type 'a subst = 'a * int
 
@@ -41,6 +44,7 @@ let rec term_of_value = function
   | ValueCtor c -> TermCtor c
   | ValueApp (c, v) -> TermCtorApp (c, term_of_value v)
   | ValueTuple l -> TermTuple (List2.map term_of_value l)
+  | ValueChar c -> TermChar c
 
 let rec term_of_pat = function
   | PatUnit -> TermUnit
@@ -48,6 +52,7 @@ let rec term_of_pat = function
   | PatCtor c -> TermCtor c
   | PatApp (c, p) -> TermCtorApp (c, term_of_pat p)
   | PatTuple l -> TermTuple (List2.map term_of_pat l)
+  | PatChar c -> TermChar c
 
 let rec term_of_expr = function
   | ExprPat p -> term_of_pat p
@@ -75,15 +80,16 @@ let rec subst_term ((v, x) as s) = function
   | TermLet { p; t_1; t_2 } ->
       TermLet { p; t_1 = subst_term s t_1; t_2 = subst_term s t_2 }
   | TermIso { phi; omega; t } -> TermIso { phi; omega; t = subst_term s t }
+  | TermChar c -> TermChar c
 
 let subst_term_bulk l t = List.fold_left (fun t s -> subst_term s t) t l
 
 let rec subst_iso ((omega', phi) as s) = function
   | IsoVar psi -> if psi = phi then omega' else IsoVar psi
   | IsoFix (psi, omega) ->
-      IsoFix (psi, subst_iso s omega) (* alpha-cvt assumed *)
+      if psi = phi then IsoFix (psi, omega) else IsoFix (psi, subst_iso s omega)
   | IsoFun (psi, omega) ->
-      IsoFun (psi, subst_iso s omega) (* alpha-cvt assumed *)
+      if psi = phi then IsoFun (psi, omega) else IsoFun (psi, subst_iso s omega)
   | IsoApp (omega_1, omega_2) ->
       IsoApp (subst_iso s omega_1, subst_iso s omega_2)
   | IsoInv omega -> IsoInv (subst_iso s omega)
@@ -96,14 +102,16 @@ and subst_iso_expr ((omega', phi) as s) = function
       ExprLetApp { p_1; omega = subst_iso s omega; p_2; e = subst_iso_expr s e }
 
 let rec subst_iso_term ((omega', phi) as s) = function
-  | (TermUnit | TermVar _ | TermCtor _) as t -> t
+  | (TermUnit | TermVar _ | TermCtor _ | TermChar _) as t -> t
   | TermCtorApp (c, t) -> TermCtorApp (c, subst_iso_term s t)
   | TermTuple l -> TermTuple (List2.map (subst_iso_term s) l)
   | TermIsoApp (omega, t) -> TermIsoApp (subst_iso s omega, subst_iso_term s t)
   | TermLet { p; t_1; t_2 } ->
       TermLet { p; t_1 = subst_iso_term s t_1; t_2 = subst_iso_term s t_2 }
   | TermIso { phi = psi; omega; t } ->
-      TermIso { phi = psi; omega = subst_iso s omega; t = subst_iso_term s t }
+      let omega = subst_iso s omega in
+      let t = if psi = phi then t else subst_iso_term s t in
+      TermIso { phi = psi; omega; t }
 
 let rec invert = function
   | IsoVar phi -> IsoVar phi
@@ -143,14 +151,30 @@ let rec pp_value map fmt =
           in
           f fmt "%i" (counter 1 v)
       | "Cons" ->
-          let rec cons first = function
+          let type state = First | Char | Other in
+          let rec cons state = function
+            | ValueApp (_, ValueTuple List2.(ValueChar c :: List1.(v' :: [])))
+              ->
+                begin match state with
+                | First -> f fmt "\""
+                | Char | Other -> ()
+                end;
+                f fmt "%c" c;
+                cons Char v'
             | ValueApp (_, ValueTuple List2.(v :: List1.(v' :: []))) ->
-                if first then f fmt "[" else f fmt "; ";
+                begin match state with
+                | First -> f fmt "["
+                | Char (* unreachable *) | Other -> f fmt "; "
+                end;
                 f fmt "%a" (pp_value map) v;
-                cons false v'
-            | _ -> f fmt "]"
+                cons Other v'
+            | _ ->
+                begin match state with
+                | First (* unreachable *) | Other -> f fmt "]"
+                | Char -> f fmt "\""
+                end
           in
-          cons true (ValueApp (c, v))
+          cons First (ValueApp (c, v))
       | _ ->
           begin match v with
           | ValueApp (c', _) ->
@@ -165,14 +189,16 @@ let rec pp_value map fmt =
       f fmt "(%a" (pp_value map) v;
       List1.to_list vs |> List.iter (f fmt ", %a" (pp_value map));
       f fmt ")"
+  | ValueChar c -> f fmt "'%c'" c
 
 let pat_gen alpha p =
   let rec impl = function
     | PatVar x -> [ x ]
     | PatUnit -> []
-    | PatCtor c -> []
+    | PatCtor _ -> []
     | PatApp (_, p) -> impl p
     | PatTuple l -> List2.map impl l |> List2.to_list |> List.flatten
+    | PatChar _ -> []
   in
   impl p |> List.sort_uniq Int.compare
   |> List.map (fun x -> (Alpha.fresh alpha x, x))
@@ -183,6 +209,7 @@ let rec subst_pat ((x', x) as s : int subst) : pat -> pat = function
   | PatCtor c -> PatCtor c
   | PatApp (c, p) -> PatApp (c, subst_pat s p)
   | PatTuple l -> PatTuple (List2.map (subst_pat s) l)
+  | PatChar c -> PatChar c
 
 let rec subst_term_var ((x', x) as s : int subst) : term -> term = function
   | TermUnit -> TermUnit
@@ -194,6 +221,7 @@ let rec subst_term_var ((x', x) as s : int subst) : term -> term = function
   | TermLet { p; t_1; t_2 } ->
       TermLet { p; t_1 = subst_term_var s t_1; t_2 = subst_term_var s t_2 }
   | TermIso { phi; omega; t } -> TermIso { phi; omega; t = subst_term_var s t }
+  | TermChar c -> TermChar c
 
 let rec subst_expr ((x', x) as s : int subst) : expr -> expr = function
   | ExprPat p -> ExprPat (subst_pat s p)
@@ -228,6 +256,7 @@ let rec alpha_term alpha = function
       let subst = (IsoVar fresh, phi) in
       let t'' = subst_iso_term subst t' in
       TermIso { phi = fresh; omega = omega'; t = t'' }
+  | TermChar c -> TermChar c
 
 and alpha_iso alpha = function
   | IsoVar phi -> IsoVar phi
@@ -268,14 +297,14 @@ and alpha_expr alpha = function
       ExprLetApp { p_1 = p_1'; omega = omega'; p_2; e = e'' }
 
 let rec is_fv_pat x = function
-  | PatUnit | PatCtor _ -> false
+  | PatUnit | PatCtor _ | PatChar _ -> false
   | PatVar y -> y = x
   | PatApp (_, p) -> is_fv_pat x p
   | PatTuple l -> List2.fold_left (fun b p -> b || is_fv_pat x p) false l
 
 let fv_pat p =
   let rec fv_pat_list = function
-    | PatUnit | PatCtor _ -> []
+    | PatUnit | PatCtor _ | PatChar _ -> []
     | PatVar x -> [ x ]
     | PatApp (_, p) -> fv_pat_list p
     | PatTuple l -> List2.map fv_pat_list l |> List2.to_list |> List.flatten

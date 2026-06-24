@@ -13,6 +13,7 @@ let unify (pv : pat * value) : value subst list option =
           List.map impl (List2.to_list combined) |> unwrap_opt
         in
         List.flatten substs_list
+    | PatChar c, ValueChar c' -> if c = c' then Some [] else None
     | _ -> None
   in
   let open Util in
@@ -56,6 +57,7 @@ let rec eval_term = function
       | None -> failwith "stuck: TermLet (pattern did not match)"
     end
   | TermIso { phi; omega; t } -> subst_iso_term (omega, phi) t |> eval_term
+  | TermChar c -> ValueChar c
 
 and eval_iso = function
   | (IsoVar _ | IsoFun _ | IsoCase _) as omega -> omega

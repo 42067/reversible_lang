@@ -9,6 +9,7 @@ end) : sig
     | PatCtor of t
     | PatApp of t * pat
     | PatTuple of pat List2.t
+    | PatChar of char
 
   type epat =
     | EPatUnit
@@ -17,6 +18,7 @@ end) : sig
     | EPatCtorApp of t * epat
     | EPatTuple of epat List2.t
     | EPatIsoApp of iso * epat
+    | EPatChar of char
 
   and expr = ExprEPat of epat | ExprLet of { p : pat; ep : epat; e : expr }
 
@@ -37,6 +39,7 @@ end) : sig
     | TermIsoApp of iso * term
     | TermLet of { p : pat; t_1 : term; t_2 : term }
     | TermIso of { phi : t; omega : iso; t : term }
+    | TermChar of char
 
   type base =
     | BaseUnit
@@ -44,6 +47,7 @@ end) : sig
     | BaseVar of t
     | BaseProd of base List2.t
     | BaseApp of base List1.t * t
+    | BaseChar
 
   type variant = t * base option
   type typedef = { params : t list; name : t; variants : variant list }

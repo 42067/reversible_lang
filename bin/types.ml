@@ -4,6 +4,7 @@ type base =
   | BaseVar of int
   | BaseProd of base List2.t
   | BaseApp of base List1.t * int
+  | BaseChar
 
 type iso =
   | IsoBiArrow of base * base
@@ -14,7 +15,7 @@ type iso =
 type 'a subst = 'a * int
 
 let rec is_fv_base v = function
-  | BaseUnit | BaseIdent _ -> false
+  | BaseUnit | BaseIdent _ | BaseChar -> false
   | BaseVar v' -> v' = v
   | BaseProd l -> List2.fold_left (fun acc a -> acc || is_fv_base v a) false l
   | BaseApp (l, _) ->
@@ -33,7 +34,7 @@ let rec invert = function
   | IsoInv t -> t
 
 let rec fv_base_list : base -> int list = function
-  | BaseUnit | BaseIdent _ -> []
+  | BaseUnit | BaseIdent _ | BaseChar -> []
   | BaseVar v -> [ v ]
   | BaseProd l -> List2.map fv_base_list l |> List2.to_list |> List.flatten
   | BaseApp (l, _) -> List1.map fv_base_list l |> List1.to_list |> List.flatten
@@ -61,6 +62,7 @@ let rec subst_base ((a, v) as s) = function
   | BaseVar v' -> if v' = v then a else BaseVar v'
   | BaseProd l -> BaseProd (List2.map (subst_base s) l)
   | BaseApp (l, x) -> BaseApp (List1.map (subst_base s) l, x)
+  | BaseChar -> BaseChar
 
 let rec subst_iso ((t, v) as s) = function
   | IsoBiArrow (a, b) -> IsoBiArrow (a, b)
@@ -90,14 +92,14 @@ let rec pp_base map fmt =
   | BaseVar v -> f fmt "'%s" (m v)
   | BaseProd List2.(a :: aa) ->
       begin match a with
-      | BaseUnit | BaseIdent _ | BaseVar _ | BaseApp _ ->
+      | BaseUnit | BaseIdent _ | BaseVar _ | BaseApp _ | BaseChar ->
           f fmt "%a" (pp_base map) a
       | BaseProd _ -> f fmt "(%a)" (pp_base map) a
       end;
       List.iter
         begin fun a ->
           match a with
-          | BaseUnit | BaseIdent _ | BaseVar _ | BaseApp _ ->
+          | BaseUnit | BaseIdent _ | BaseVar _ | BaseApp _ | BaseChar ->
               f fmt " * %a" (pp_base map) a
           | BaseProd _ -> f fmt " * (%a)" (pp_base map) a
         end
@@ -107,7 +109,7 @@ let rec pp_base map fmt =
       | [] ->
           begin match a with
           | BaseProd _ -> f fmt "(%a) %s" (pp_base map) a (m x)
-          | BaseUnit | BaseIdent _ | BaseVar _ | BaseApp _ ->
+          | BaseUnit | BaseIdent _ | BaseVar _ | BaseApp _ | BaseChar ->
               f fmt "%a %s" (pp_base map) a (m x)
           end
       | _ ->
@@ -115,6 +117,7 @@ let rec pp_base map fmt =
           List.iter (f fmt ", %a" (pp_base map)) aa;
           f fmt ") %s" (m x)
       end
+  | BaseChar -> f fmt "char"
 
 let create_map_base ts =
   let fv = List.map fv_base_list ts |> List.flatten in
