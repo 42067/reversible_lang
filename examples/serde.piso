@@ -1,8 +1,9 @@
-type bool      = False | True
-type nat       = Z | S of nat
-type 'a list   = Nil | Cons of 'a * 'a list
-type 'a option = None | Some of 'a
-type symbol    = Char of char | Open | Close | Delim
+type bool            = False | True
+type nat             = Z | S of nat
+type 'a list         = Nil | Cons of 'a * 'a list
+type 'a option       = None | Some of 'a
+type ('l, 'r) either = Left of 'l | Right of 'r
+type symbol          = Char of char | Open | Close | Delim
 ;;
 
 (* auxiliary functions *)
@@ -60,8 +61,8 @@ iso symbol_of_char = case
 | 'Q' <-> Char 'Q' | 'R' <-> Char 'R' | 'S' <-> Char 'S'
 | 'T' <-> Char 'T' | 'U' <-> Char 'U' | 'V' <-> Char 'V'
 | 'W' <-> Char 'W' | 'X' <-> Char 'X' | 'Y' <-> Char 'Y'
-| 'Z' <-> Char 'Z' | ' ' <-> Char ' ' | '(' <-> Open
-| ')' <-> Close    | ',' <-> Delim
+| 'Z' <-> Char 'Z'
+| '(' <-> Open     | ')' <-> Close    | ',' <-> Delim
 in
 
 (* finds the leftmost exposed delimiter *)
@@ -96,7 +97,7 @@ iso rec concat' = case
 | (x :: xs, ys) <->
   let (xs, n) = concat' (xs, x :: ys) in (xs, S n)
 in iso concat (xs, ys) =
-  concat' (rev xs, ',' :: ' ' :: ys)
+  concat' (rev xs, ',' :: ys)
   |> inv find_delim
   |> parenthesize
 in
@@ -114,23 +115,28 @@ in
 
 iso rec serialize_nat = case
 | 0   <-> "Z"
-| S n <-> 'S'::' ' :: parenthesize (serialize_nat n)
+| S n <-> 'S' :: parenthesize (serialize_nat n)
 in
 
 iso rec serialize_list f = case
 | []      <-> "Nil"
-| x :: xs <-> 'C'::'o'::'n'::'s'::' ' :: concat (f x, serialize_list f xs)
+| x :: xs <-> 'C'::'o'::'n'::'s' :: concat (f x, serialize_list f xs)
 in
 
 iso serialize_option f = case
 | None   <-> "None"
-| Some x <-> 'S'::'o'::'m'::'e'::' ' :: parenthesize (f x)
+| Some x <-> 'S'::'o'::'m'::'e' :: parenthesize (f x)
+in
+
+iso serialize_either f g = case
+| Left x  <-> 'L'::'e'::'f'::'t'      :: parenthesize (f x)
+| Right x <-> 'R'::'i'::'g'::'h'::'t' :: parenthesize (g x)
 in
 
 iso serialize = serialize_list (serialize_list serialize_nat) in
 
 (
   serialize [[0; 2]; [1]],
-  inv serialize "Cons (Cons (Z, Cons (S (S (Z)), Nil)), Cons (Cons (S (Z), Nil), Nil))"
+  inv serialize "Cons(Cons(Z,Cons(S(S(Z)),Nil)),Cons(Cons(S(Z),Nil),Nil))"
 )
 
