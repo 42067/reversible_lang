@@ -38,10 +38,11 @@ iso rec foldl_map f = case
 in
 
 iso rec repeat = case
-| (0, x)   <-> ([], x)
-| (S n, x) <->
-  let (xs, x) = repeat (n, x) in
-  (x :: xs, x)
+| (x, 1)       <-> [x]
+| (x, S (S n)) <->
+  let (x, x') = (x, x) in
+  let x' :: xs = repeat (x', S n) in
+  x :: x' :: xs
 in
 
 iso rec split = case
@@ -85,12 +86,12 @@ in
 
 iso sum (l) = foldl_map add (0, l) in
 
-iso rec push_back = case
+iso rec snoc = case
 | ([], y)      <-> [y]
 | (x :: xs, y) <->
-  let y :: xs = push_back (xs, y) in
-  x :: y :: xs
+  let z :: zs = snoc (xs, y) in
+  x :: z :: zs
 in
 
-rev "Hello, world!"
+repeat (rev "Hello", 3)
 

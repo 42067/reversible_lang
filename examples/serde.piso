@@ -20,14 +20,11 @@ iso rec map f = case
 in
 
 (* snoc (xs, y) = xs @ [y] *)
-iso rec snoc' = case
-| ([], y, 0)        <-> ([y], 0)
-| (x :: xs, y, S n) <->
-  let (xs, n) = snoc' (xs, y, n) in (x :: xs, S n)
-in iso snoc (xs, y) =
-  let (n, xs) = len xs in
-  let (xs, n) = snoc' (xs, y, n) in
-  inv len (S n, xs)
+iso rec snoc = case
+| ([], y)      <-> [y]
+| (x :: xs, y) <->
+  let z :: zs = snoc (xs, y) in
+  x :: z :: zs
 in
 
 iso parenthesize (xs) = '(' :: snoc (xs, ')') in
@@ -91,7 +88,7 @@ in iso find_delim (xs) =
 in
 
 (* concat' (xs, ys) = (`xs in reverse order` @ ys, len ys) *)
-(* concat  (xs, ys) = "(%s, %s)" xs ys *)
+(* concat  (xs, ys) = "(%s,%s)" xs ys *)
 iso rec concat' = case
 | ([], ys)      <-> (ys, 0)
 | (x :: xs, ys) <->

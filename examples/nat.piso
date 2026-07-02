@@ -32,8 +32,7 @@ iso rec cmp = case
 | (S n, 0)   <-> (Gt, S n, 0)
 | (0, 0)     <-> (Eq, 0, 0)
 | (S m, S n) <->
-  let (o, m, n) = cmp (m, n) in
-  (o, S m, S n)
+  let (o, m, n) = cmp (m, n) in (o, S m, S n)
 in
 
 iso rec halve = case

@@ -34,8 +34,7 @@ in
 
 iso rec nat_lt = case
 | (0, S n)   <-> (True, 0, S n)
-| (S m, 0)   <-> (False, S m, 0)
-| (0, 0)     <-> (False, 0, 0)
+| (m, 0)     <-> (False, m, 0)
 | (S m, S n) <->
   let (b, m, n) = nat_lt (m, n) in (b, S m, S n)
 in

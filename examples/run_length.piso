@@ -19,8 +19,7 @@ iso rec run_length eq = case
     | Left x                    <-> [(x, 0)]
     | Right ((x, S n) :: ys)    <-> (x, S n) :: ys
     | Right ((x, 0) :: y :: ys) <-> (x, 0) :: y :: ys
-  in
-  x :: xs
+  in x :: xs
 in
 
 iso rec nat_eq = case

@@ -17,8 +17,7 @@ iso rec insert lt = case
     | ((False, y, x), ys) <-> (x :: y :: ys, 0)
     | ((True, y, x), ys)  <->
       let (ys, n) = insert lt (x, ys) in (y :: ys, S n)
-  in
-  (x :: y :: ys, n)
+  in (x :: y :: ys, n)
 in
 
 iso rec isort_aux lt = case
@@ -33,8 +32,7 @@ iso isort lt = isort_aux lt |> recover in
 
 iso rec nat_lt = case
 | (0, S n)   <-> (True, 0, S n)
-| (S m, 0)   <-> (False, S m, 0)
-| (0, 0)     <-> (False, 0, 0)
+| (m, 0)     <-> (False, m, 0)
 | (S m, S n) <-> let (b, m, n) = nat_lt (m, n) in (b, S m, S n)
 in
 

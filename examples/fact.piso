@@ -1,0 +1,125 @@
+type nat             = Z | S of nat
+type 'a list         = Nil | Cons of 'a * 'a list
+type bool            = False | True
+type 'a option       = None | Some of 'a
+type ('l, 'r) either = Left of 'l | Right of 'r
+;;
+
+(*
+  56 -fact'------------> [Some 2; Some 2; Some 2; None; None; None; None; None; Some 7; Some 7]
+     -run_length-------> [(Some 2, 3); (None, 5); (Some 7, 2)]
+     -rev--------------> [(Some 7, 2); (None, 5); (Some 2, 3)]
+     -(decrement head)-> [(Some 7, 1); (None, 5); (Some 2, 3)]
+     -cleanup----------> [(7, 1); (2, 3)]
+
+  list produced by `fact'` always has one duplicated item at the end,
+  which is why a decrement is needed after applying `rev`
+
+  `(None, n)` can be erased using surrounding primes
+  e.g., (7, 2) = add (5, 2)
+*)
+
+(* lt (m, n) = (m < n, m, n) *)
+iso rec lt = case
+| (m, 0)     <-> (False, m, 0)
+| (0, S n)   <-> (True, 0, S n)
+| (S m, S n) <->
+  let (b, m, n) = lt (m, n) in (b, S m, S n)
+in
+
+(* add (m, n) = (m + n, n) *)
+iso rec add = case
+| (m, 0)   <-> (m, 0)
+| (m, S n) <-> let (m, n) = add (S m, n) in (m, S n)
+in
+
+(* div (m, n) = (m / n, n, m % n) *)
+iso rec div' (acc, n, m) =
+  match (lt (m, n), acc) with
+  | ((True, m, n), 0)    <-> (0, n, m)
+  | ((False, m, n), acc) <->
+    let (m, n) = inv add (m, n) in
+    let (acc, n, m) = div' (acc, n, m) in
+    (S acc, n, m)
+in iso div (m, n) = div' (0, n, m) in
+
+iso rec fact' = case
+| (1, n)       <-> [Some n]
+| (S (S m), n) <->
+  let x :: y :: xs =
+    match div (S (S m), n) with
+    | (k, n, 0)   <->
+      let (n, n') = (n, n) in Some n' :: fact' (k, n)
+    | (k, n, S l) <->
+      let (m, n) = inv div (k, n, S l) in None :: fact' (m, S n)
+  in x :: y :: xs
+in
+
+(* e.g. [a; a; a; b; c; c] |-> [(a, 3); (b, 1); (c, 2)] *)
+iso rec run_length eq = case
+| []      <-> []
+| x :: xs <->
+  let branched = match (x, run_length eq xs) with
+    | (x, [])           <-> Left x
+    | (x, (y, n) :: ys) <-> Right begin
+        match (eq (x, y), n, ys) with
+        | ((True, x, x), S n, ys) <-> (x, S (S n)) :: ys
+        | ((False, x, y), n, ys)  <-> (x, 1) :: (y, n) :: ys
+      end
+  in let x :: xs = match branched with
+    | Left x                     <-> [(x, 1)]
+    | Right ((x, S (S n)) :: ys) <-> (x, S (S n)) :: ys
+    | Right ((x, 1) :: y :: ys)  <-> (x, 1) :: y :: ys
+  in x :: xs
+in
+
+iso rec nat_eq = case
+| (0, 0)     <-> (True, 0, 0)
+| (S m, 0)   <-> (False, S m, 0)
+| (0, S n)   <-> (False, 0, S n)
+| (S m, S n) <-> let (b, m, n) = nat_eq (m, n) in (b, S m, S n)
+in
+
+iso option_eq eq = case
+| (None, None)     <-> (True, None, None)
+| (None, Some y)   <-> (False, None, Some y)
+| (Some x, None)   <-> (False, Some x, None)
+| (Some x, Some y) <-> let (b, x, y) = eq (x, y) in (b, Some x, Some y)
+in
+
+iso rec len = case
+| []      <-> (0, [])
+| x :: xs <-> let (n, xs) = len xs in (S n, x :: xs)
+in
+
+iso rec rev' = case
+| (l, (0, []))        <-> (l, (0, []))
+| (l, (S n, x :: xs)) <->
+  let (l, (n, xs)) = rev' (x :: l, (n, xs)) in
+  (l, (S n, xs))
+in iso rev (l) =
+  let (l, (n, [])) = rev' ([], len l) in
+  inv len (n, l)
+in
+
+iso rec cleanup = case
+| [(Some 2, l)]                                 <-> [(2, l)]
+| [(Some k, l); (None, m)]                      <->
+  let (k, (k, 2)) = (k, add (m, 2)) in
+  let S (S (S k)) = k in
+  [(S (S (S k)), l)]
+| (Some k, l) :: (None, m) :: (Some n, o) :: xs <->
+  let (k, (k, n)) = (k, add (m, n)) in
+  let S (S (S k)) = k in
+  let x :: xs = cleanup ((Some n, o) :: xs) in
+  (S (S (S k)), l) :: x :: xs
+in
+
+iso fact (n) =
+  let (Some m, S n) :: xs =
+    fact' (n, 2) |> run_length (option_eq nat_eq) |> rev in
+  (Some m, n) :: xs |> cleanup
+in
+
+fact 264
+
